@@ -28,3 +28,6 @@ fuzz/corpus/**
 
 # Code coverage output
 /coverage
+
+# Dir Env
+.direnv
