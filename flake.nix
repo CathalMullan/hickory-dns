@@ -51,17 +51,13 @@
             NIX_PATH = "nixpkgs=${nixpkgs.outPath}";
 
             # Rust
+            RUSTFLAGS = "-C target-cpu=native -C link-arg=-fuse-ld=mold";
             RUST_BACKTRACE = "0";
           };
 
-          shellHook = ''
-            # Rust
-            export RUSTFLAGS="-Z hint-mostly-unused -Z threads=$(nproc) -C target-cpu=native -C link-arg=-fuse-ld=mold"
-          '';
-
           buildInputs = with pkgs; [
             # Rust
-            (rust-bin.nightly.latest.minimal.override {
+            (rust-bin.stable.latest.minimal.override {
               extensions = [
                 "clippy"
                 "llvm-tools"
