@@ -13,7 +13,6 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
 use futures::{
-    AsyncRead, AsyncWrite,
     future::{self, BoxFuture},
     stream::{Stream, once},
 };
@@ -32,36 +31,24 @@ use hickory_resolver::name_server::{ConnectionProvider, PoolContext};
 
 pub struct TcpPlaceholder;
 
-impl AsyncRead for TcpPlaceholder {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<std::io::Result<usize>> {
-        Poll::Ready(Ok(buf.len()))
-    }
-}
-
-impl AsyncWrite for TcpPlaceholder {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<std::io::Result<usize>> {
-        Poll::Ready(Ok(buf.len()))
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Poll::Ready(Ok(()))
-    }
-}
-
 impl DnsTcpStream for TcpPlaceholder {
     type Time = TokioTime;
+
+    fn poll_read(&mut self, _cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+        Poll::Ready(Ok(buf.len()))
+    }
+
+    fn poll_write(&mut self, _cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
+        Poll::Ready(Ok(buf.len()))
+    }
+
+    fn poll_flush(&mut self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(&mut self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
 }
 
 pub struct UdpPlaceholder;

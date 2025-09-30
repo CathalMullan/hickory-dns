@@ -35,85 +35,89 @@ pub fn spawn_bg<F: Future<Output = R> + Send + 'static, R: Send + 'static>(
 pub mod iocompat {
     use core::pin::Pin;
     use core::task::{Context, Poll};
-    use std::io::{self, IoSlice};
+    use std::io;
 
-    use futures_io::{AsyncRead, AsyncWrite};
     use tokio::io::{AsyncRead as TokioAsyncRead, AsyncWrite as TokioAsyncWrite, ReadBuf};
 
-    /// Conversion from `tokio::io::{AsyncRead, AsyncWrite}` to `std::io::{AsyncRead, AsyncWrite}`
-    pub struct AsyncIoTokioAsStd<T: TokioAsyncRead + TokioAsyncWrite>(pub T);
+    use crate::runtime::TokioTime;
+    use crate::tcp::DnsTcpStream;
 
-    impl<T: TokioAsyncRead + TokioAsyncWrite + Unpin> Unpin for AsyncIoTokioAsStd<T> {}
-    impl<R: TokioAsyncRead + TokioAsyncWrite + Unpin> AsyncRead for AsyncIoTokioAsStd<R> {
+    /// Adapter from `DnsTcpStream` to `tokio::io`.
+    pub struct AsyncIoStdAsTokio<S: DnsTcpStream>(pub S);
+
+    impl<S: DnsTcpStream> Unpin for AsyncIoStdAsTokio<S> {}
+
+    impl<S: DnsTcpStream> TokioAsyncRead for AsyncIoStdAsTokio<S> {
         fn poll_read(
             mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            buf: &mut [u8],
-        ) -> Poll<io::Result<usize>> {
-            let mut buf = ReadBuf::new(buf);
-            let polled = Pin::new(&mut self.0).poll_read(cx, &mut buf);
-
-            polled.map_ok(|_| buf.filled().len())
-        }
-    }
-
-    impl<W: TokioAsyncRead + TokioAsyncWrite + Unpin> AsyncWrite for AsyncIoTokioAsStd<W> {
-        fn poll_write(
-            mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            buf: &[u8],
-        ) -> Poll<io::Result<usize>> {
-            Pin::new(&mut self.0).poll_write(cx, buf)
-        }
-        fn poll_write_vectored(
-            mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            bufs: &[IoSlice<'_>],
-        ) -> Poll<io::Result<usize>> {
-            Pin::new(&mut self.0).poll_write_vectored(cx, bufs)
-        }
-        fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-            Pin::new(&mut self.0).poll_flush(cx)
-        }
-        fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-            Pin::new(&mut self.0).poll_shutdown(cx)
-        }
-    }
-
-    /// Conversion from `std::io::{AsyncRead, AsyncWrite}` to `tokio::io::{AsyncRead, AsyncWrite}`
-    pub struct AsyncIoStdAsTokio<T: AsyncRead + AsyncWrite>(pub T);
-
-    impl<T: AsyncRead + AsyncWrite + Unpin> Unpin for AsyncIoStdAsTokio<T> {}
-    impl<R: AsyncRead + AsyncWrite + Unpin> TokioAsyncRead for AsyncIoStdAsTokio<R> {
-        fn poll_read(
-            self: Pin<&mut Self>,
             cx: &mut Context<'_>,
             buf: &mut ReadBuf<'_>,
         ) -> Poll<io::Result<()>> {
-            Pin::new(&mut self.get_mut().0)
-                .poll_read(cx, buf.initialized_mut())
-                .map_ok(|len| buf.advance(len))
+            let unfilled = buf.initialize_unfilled();
+            match self.0.poll_read(cx, unfilled) {
+                Poll::Ready(Ok(n)) => {
+                    buf.advance(n);
+                    Poll::Ready(Ok(()))
+                }
+                Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+                Poll::Pending => Poll::Pending,
+            }
         }
     }
 
-    impl<W: AsyncRead + AsyncWrite + Unpin> TokioAsyncWrite for AsyncIoStdAsTokio<W> {
+    impl<S: DnsTcpStream> TokioAsyncWrite for AsyncIoStdAsTokio<S> {
         fn poll_write(
-            self: Pin<&mut Self>,
+            mut self: Pin<&mut Self>,
             cx: &mut Context<'_>,
             buf: &[u8],
         ) -> Poll<Result<usize, io::Error>> {
-            Pin::new(&mut self.get_mut().0).poll_write(cx, buf)
+            self.0.poll_write(cx, buf)
         }
 
-        fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-            Pin::new(&mut self.get_mut().0).poll_flush(cx)
+        fn poll_flush(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), io::Error>> {
+            self.0.poll_flush(cx)
         }
 
         fn poll_shutdown(
-            self: Pin<&mut Self>,
+            mut self: Pin<&mut Self>,
             cx: &mut Context<'_>,
         ) -> Poll<Result<(), io::Error>> {
-            Pin::new(&mut self.get_mut().0).poll_close(cx)
+            self.0.poll_shutdown(cx)
+        }
+    }
+
+    /// Adapter from `tokio::io` to `DnsTcpStream`.
+    pub struct AsyncIoTokioAsStd<T: TokioAsyncRead + TokioAsyncWrite + Unpin>(pub T);
+
+    impl<T: TokioAsyncRead + TokioAsyncWrite + Unpin> Unpin for AsyncIoTokioAsStd<T> {}
+
+    impl<T: TokioAsyncRead + TokioAsyncWrite + Unpin + Send + Sync + 'static> DnsTcpStream
+        for AsyncIoTokioAsStd<T>
+    {
+        type Time = TokioTime;
+
+        fn poll_read(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+            let mut buf = ReadBuf::new(buf);
+            match Pin::new(&mut self.0).poll_read(cx, &mut buf) {
+                Poll::Ready(Ok(())) => Poll::Ready(Ok(buf.filled().len())),
+                Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+                Poll::Pending => Poll::Pending,
+            }
+        }
+
+        fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
+            Pin::new(&mut self.0).poll_write(cx, buf)
+        }
+
+        fn poll_flush(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Pin::new(&mut self.0).poll_flush(cx)
+        }
+
+        fn poll_shutdown(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Pin::new(&mut self.0).poll_shutdown(cx)
         }
     }
 }

@@ -15,7 +15,6 @@ use core::task::{Context, Poll};
 use core::time::Duration;
 use std::io;
 
-use futures_io::{AsyncRead, AsyncWrite, IoSlice};
 use futures_util::stream::Stream;
 use futures_util::{self, future::Future, ready};
 use tracing::{debug, trace};
@@ -26,9 +25,21 @@ use crate::runtime::Time;
 use crate::xfer::StreamReceiver;
 
 /// Trait for TCP connection
-pub trait DnsTcpStream: AsyncRead + AsyncWrite + Unpin + Send + Sync + Sized + 'static {
+pub trait DnsTcpStream: Unpin + Send + Sync + Sized + 'static {
     /// Timer type to use with this TCP stream type
     type Time: Time;
+
+    /// Poll to read data from the stream
+    fn poll_read(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>>;
+
+    /// Poll to write data to the stream
+    fn poll_write(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>>;
+
+    /// Poll to flush the stream
+    fn poll_flush(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>>;
+
+    /// Poll to shutdown the stream
+    fn poll_shutdown(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>>;
 }
 
 /// Current state while writing to the remote of the TCP connection
@@ -184,7 +195,6 @@ impl<S: DnsTcpStream> Stream for TcpStream<S> {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let peer = self.peer_addr;
         let (socket, outbound_messages, send_state, read_state) = self.pollable_split();
-        let mut socket = Pin::new(socket);
         let mut outbound_messages = Pin::new(outbound_messages);
 
         // this will not accept incoming data while there is data to send
@@ -196,18 +206,21 @@ impl<S: DnsTcpStream> Stream for TcpStream<S> {
                 // sending...
                 match send_state {
                     Some(WriteTcpState::LenBytes { pos, length, bytes }) => {
-                        let wrote = ready!(socket.as_mut().poll_write_vectored(
-                            cx,
-                            &[IoSlice::new(&length[*pos..]), IoSlice::new(bytes)]
-                        ))?;
-                        *pos += wrote;
+                        if *pos < length.len() {
+                            let wrote = ready!(socket.poll_write(cx, &length[*pos..]))?;
+                            *pos += wrote;
+                        } else {
+                            let bytes_pos = *pos - length.len();
+                            let wrote = ready!(socket.poll_write(cx, &bytes[bytes_pos..]))?;
+                            *pos += wrote;
+                        }
                     }
                     Some(WriteTcpState::Bytes { pos, bytes }) => {
-                        let wrote = ready!(socket.as_mut().poll_write(cx, &bytes[*pos..]))?;
+                        let wrote = ready!(socket.poll_write(cx, &bytes[*pos..]))?;
                         *pos += wrote;
                     }
                     Some(WriteTcpState::Flushing) => {
-                        ready!(socket.as_mut().poll_flush(cx))?;
+                        ready!(socket.poll_flush(cx))?;
                     }
                     _ => (),
                 }
@@ -295,7 +308,7 @@ impl<S: DnsTcpStream> Stream for TcpStream<S> {
             let new_state: Option<ReadTcpState> = match read_state {
                 ReadTcpState::LenBytes { pos, bytes } => {
                     // debug!("reading length {}", bytes.len());
-                    let read = ready!(socket.as_mut().poll_read(cx, &mut bytes[*pos..]))?;
+                    let read = ready!(socket.poll_read(cx, &mut bytes[*pos..]))?;
                     if read == 0 {
                         // the Stream was closed!
                         debug!("zero bytes read, stream closed?");
@@ -328,7 +341,7 @@ impl<S: DnsTcpStream> Stream for TcpStream<S> {
                     }
                 }
                 ReadTcpState::Bytes { pos, bytes } => {
-                    let read = ready!(socket.as_mut().poll_read(cx, &mut bytes[*pos..]))?;
+                    let read = ready!(socket.poll_read(cx, &mut bytes[*pos..]))?;
                     if read == 0 {
                         // the Stream was closed!
                         trace!("zero bytes read for message, stream closed?");

@@ -11,7 +11,6 @@ use std::{
 };
 
 use bytes::Buf;
-use futures_util::{AsyncRead, AsyncWrite};
 use hickory_proto::{
     op::{Message, OpCode, Query, ResponseCode},
     rr::{
@@ -370,14 +369,8 @@ impl MockTcpStream {
 
 impl DnsTcpStream for MockTcpStream {
     type Time = TokioTime;
-}
 
-impl AsyncRead for MockTcpStream {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<io::Result<usize>> {
+    fn poll_read(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
         let mut guard = self.inner.lock().unwrap();
         let len = guard.incoming_buffer.len();
         if len == 0 {
@@ -388,14 +381,8 @@ impl AsyncRead for MockTcpStream {
         guard.incoming_buffer.copy_to_slice(&mut buf[..clamped_len]);
         Poll::Ready(Ok(clamped_len))
     }
-}
 
-impl AsyncWrite for MockTcpStream {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
+    fn poll_write(&mut self, _cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         let mut guard = self.inner.lock().unwrap();
         guard.outgoing_buffer.extend(buf);
 
@@ -447,11 +434,11 @@ impl AsyncWrite for MockTcpStream {
         Poll::Ready(Ok(buf.len()))
     }
 
-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+    fn poll_flush(&mut self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
     }
 
-    fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+    fn poll_shutdown(&mut self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
     }
 }
