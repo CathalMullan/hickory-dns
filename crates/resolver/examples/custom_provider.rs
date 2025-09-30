@@ -6,15 +6,17 @@ use {
         Resolver,
         config::{CLOUDFLARE, GOOGLE, ResolverConfig},
         name_server::ConnectionProvider,
-        proto::runtime::{RuntimeProvider, TokioHandle, TokioTime, iocompat::AsyncIoTokioAsStd},
+        proto::runtime::{
+            RuntimeProvider, TokioHandle, TokioTime,
+            iocompat::{AsyncIoStdAsTokio, AsyncIoTokioAsStd},
+        },
     },
-    std::future::Future,
-    std::io,
-    std::net::SocketAddr,
-    std::pin::Pin,
-    std::time::Duration,
-    tokio::net::{TcpSocket, TcpStream, UdpSocket},
-    tokio::time::timeout,
+    std::{future::Future, io, net::SocketAddr, pin::Pin, time::Duration},
+    tokio::{
+        net::{TcpSocket, TcpStream, UdpSocket},
+        time::timeout,
+    },
+    tokio_rustls::client::TlsStream,
 };
 
 #[cfg(any(feature = "webpki-roots", feature = "rustls-platform-verifier"))]
@@ -29,6 +31,7 @@ impl RuntimeProvider for PrintProvider {
     type Timer = TokioTime;
     type Udp = UdpSocket;
     type Tcp = AsyncIoTokioAsStd<TcpStream>;
+    type Tls = AsyncIoTokioAsStd<TlsStream<AsyncIoStdAsTokio<Self::Tcp>>>;
 
     fn create_handle(&self) -> Self::Handle {
         self.handle.clone()
@@ -61,6 +64,32 @@ impl RuntimeProvider for PrintProvider {
                     format!("connection to {server_addr:?} timed out after {wait_for:?}"),
                 )),
             }
+        })
+    }
+
+    #[cfg(feature = "__tls")]
+    fn connect_tls(
+        &self,
+        stream: Self::Tcp,
+        server_name: rustls::pki_types::ServerName<'static>,
+        client_config: std::sync::Arc<rustls::ClientConfig>,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::Tls>> + Send>> {
+        use tokio_rustls::TlsConnector;
+
+        let early_data_enabled = client_config.enable_early_data;
+        let tls_connector = TlsConnector::from(client_config).early_data(early_data_enabled);
+
+        Box::pin(async move {
+            let wrapped = AsyncIoStdAsTokio(stream);
+            let tls_stream = tls_connector
+                .connect(server_name, wrapped)
+                .await
+                .map_err(|e| {
+                    io::Error::new(io::ErrorKind::ConnectionRefused, format!("TLS error: {e}"))
+                })?;
+
+            println!("TLS connection established");
+            Ok(AsyncIoTokioAsStd(tls_stream))
         })
     }
 

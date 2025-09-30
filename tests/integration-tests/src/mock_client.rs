@@ -85,6 +85,8 @@ impl RuntimeProvider for MockRuntimeProvider {
     type Timer = TokioTime;
     type Udp = UdpPlaceholder;
     type Tcp = TcpPlaceholder;
+    #[cfg(feature = "__tls")]
+    type Tls = TcpPlaceholder;
 
     fn create_handle(&self) -> Self::Handle {
         TokioHandle::default()
@@ -97,6 +99,16 @@ impl RuntimeProvider for MockRuntimeProvider {
         _wait_for: Option<std::time::Duration>,
     ) -> Pin<Box<dyn Send + Future<Output = std::io::Result<Self::Tcp>>>> {
         Box::pin(async { Ok(TcpPlaceholder) })
+    }
+
+    #[cfg(feature = "__tls")]
+    fn connect_tls(
+        &self,
+        stream: Self::Tcp,
+        _server_name: rustls::pki_types::ServerName<'static>,
+        _client_config: Arc<rustls::ClientConfig>,
+    ) -> Pin<Box<dyn Future<Output = std::io::Result<Self::Tls>> + Send>> {
+        Box::pin(async move { Ok(stream) })
     }
 
     fn bind_udp(

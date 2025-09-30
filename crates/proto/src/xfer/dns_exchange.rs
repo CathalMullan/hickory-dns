@@ -32,8 +32,6 @@ use crate::quic::{QuicClientConnect, QuicClientStream};
 use crate::runtime::RuntimeProvider;
 #[cfg(feature = "std")]
 use crate::runtime::Time;
-#[cfg(feature = "__tls")]
-use crate::rustls::TlsClientStream;
 use crate::tcp::TcpClientStream;
 use crate::udp::{UdpClientConnect, UdpClientStream};
 #[cfg(any(feature = "std", feature = "no-std-rand"))]
@@ -63,10 +61,10 @@ pub enum Connecting<P: RuntimeProvider> {
     Tls(
         DnsExchangeConnect<
             DnsMultiplexerConnect<
-                BoxFuture<'static, Result<TlsClientStream<<P as RuntimeProvider>::Tcp>, io::Error>>,
-                TlsClientStream<<P as RuntimeProvider>::Tcp>,
+                BoxFuture<'static, Result<TcpClientStream<P::Tls>, io::Error>>,
+                TcpClientStream<P::Tls>,
             >,
-            DnsMultiplexer<TlsClientStream<<P as RuntimeProvider>::Tcp>>,
+            DnsMultiplexer<TcpClientStream<P::Tls>>,
             P,
         >,
     ),

@@ -1,8 +1,6 @@
 //! Abstractions to deal with different async runtimes.
 
 use alloc::boxed::Box;
-#[cfg(feature = "__quic")]
-use alloc::sync::Arc;
 use core::future::Future;
 use core::marker::Send;
 use core::net::SocketAddr;
@@ -127,6 +125,8 @@ pub mod iocompat {
 mod tokio_runtime {
     use alloc::sync::Arc;
     use std::sync::Mutex;
+    #[cfg(feature = "__tls")]
+    use tokio_rustls::client::TlsStream;
 
     #[cfg(feature = "__quic")]
     use quinn::Runtime;
@@ -134,6 +134,8 @@ mod tokio_runtime {
     use tokio::task::JoinSet;
     use tokio::time::timeout;
 
+    #[cfg(feature = "__tls")]
+    use super::iocompat::AsyncIoStdAsTokio;
     use super::iocompat::AsyncIoTokioAsStd;
     use super::*;
     use crate::xfer::CONNECT_TIMEOUT;
@@ -171,6 +173,8 @@ mod tokio_runtime {
         type Timer = TokioTime;
         type Udp = TokioUdpSocket;
         type Tcp = AsyncIoTokioAsStd<TcpStream>;
+        #[cfg(feature = "__tls")]
+        type Tls = AsyncIoTokioAsStd<TlsStream<AsyncIoStdAsTokio<Self::Tcp>>>;
 
         fn create_handle(&self) -> Self::Handle {
             self.0.clone()
@@ -203,6 +207,44 @@ mod tokio_runtime {
                         format!("connection to {server_addr:?} timed out after {wait_for:?}"),
                     )),
                 }
+            })
+        }
+
+        #[cfg(feature = "__tls")]
+        fn connect_tls(
+            &self,
+            stream: Self::Tcp,
+            server_name: rustls_pki_types::ServerName<'static>,
+            client_config: Arc<rustls::ClientConfig>,
+        ) -> Pin<Box<dyn Future<Output = io::Result<Self::Tls>> + Send>> {
+            use tokio_rustls::TlsConnector;
+
+            let early_data_enabled = client_config.enable_early_data;
+            let tls_connector = TlsConnector::from(client_config).early_data(early_data_enabled);
+
+            Box::pin(async move {
+                let s = match timeout(
+                    CONNECT_TIMEOUT,
+                    tls_connector.connect(server_name, AsyncIoStdAsTokio(stream)),
+                )
+                .await
+                {
+                    Ok(Ok(s)) => s,
+                    Ok(Err(e)) => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::ConnectionRefused,
+                            format!("tls error: {e}"),
+                        ));
+                    }
+                    Err(_) => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::TimedOut,
+                            format!("TLS handshake timed out after {CONNECT_TIMEOUT:?}"),
+                        ));
+                    }
+                };
+
+                Ok(AsyncIoTokioAsStd(s))
             })
         }
 
@@ -258,6 +300,10 @@ pub trait RuntimeProvider: Clone + Send + Sync + Unpin + 'static {
     /// TcpStream
     type Tcp: DnsTcpStream;
 
+    /// TlsStream
+    #[cfg(feature = "__tls")]
+    type Tls: DnsTcpStream;
+
     /// Create a runtime handle
     fn create_handle(&self) -> Self::Handle;
 
@@ -268,6 +314,16 @@ pub trait RuntimeProvider: Clone + Send + Sync + Unpin + 'static {
         bind_addr: Option<SocketAddr>,
         timeout: Option<Duration>,
     ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Tcp>>>>;
+
+    /// Create a TLS connection with custom configuration.
+    #[cfg(feature = "__tls")]
+    #[allow(clippy::type_complexity)]
+    fn connect_tls(
+        &self,
+        stream: Self::Tcp,
+        server_name: rustls_pki_types::ServerName<'static>,
+        client_config: alloc::sync::Arc<rustls::ClientConfig>,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::Tls>> + Send>>;
 
     /// Create a UDP socket bound to `local_addr`. The returned value should **not** be connected to `server_addr`.
     /// *Notice: the future should be ready once returned at best effort. Otherwise UDP DNS may need much more retries.*
@@ -299,7 +355,7 @@ pub trait QuicSocketBinder {
         &self,
         _local_addr: SocketAddr,
         _server_addr: SocketAddr,
-    ) -> Result<Arc<dyn quinn::AsyncUdpSocket>, io::Error>;
+    ) -> Result<alloc::sync::Arc<dyn quinn::AsyncUdpSocket>, io::Error>;
 }
 
 /// A type defines the Handle which can spawn future.
