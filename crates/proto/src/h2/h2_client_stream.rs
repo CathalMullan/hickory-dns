@@ -35,7 +35,7 @@ use crate::error::ProtoError;
 use crate::http::Version;
 use crate::op::{DnsRequest, DnsResponse};
 use crate::runtime::RuntimeProvider;
-use crate::runtime::iocompat::AsyncIoStdAsTokio;
+use crate::runtime::iocompat::DnsStreamAdapter;
 use crate::tcp::DnsTcpStream;
 use crate::xfer::{CONNECT_TIMEOUT, DnsRequestSender, DnsResponseStream};
 
@@ -422,7 +422,7 @@ where
         // TODO: also abstract away Tokio TLS in RuntimeProvider.
         tls: BoxFuture<
             'static,
-            Result<Result<TokioTlsClientStream<AsyncIoStdAsTokio<S>>, io::Error>, error::Elapsed>,
+            Result<Result<TokioTlsClientStream<DnsStreamAdapter<S>>, io::Error>, error::Elapsed>,
         >,
         name_server_name: Arc<str>,
         name_server: SocketAddr,
@@ -434,7 +434,7 @@ where
             Result<
                 (
                     SendRequest<Bytes>,
-                    Connection<TokioTlsClientStream<AsyncIoStdAsTokio<S>>, Bytes>,
+                    Connection<TokioTlsClientStream<DnsStreamAdapter<S>>, Bytes>,
                 ),
                 h2::Error,
             >,
@@ -477,7 +477,7 @@ where
                             tls: Box::pin(timeout(
                                 CONNECT_TIMEOUT,
                                 TlsConnector::from(tls.client_config)
-                                    .connect(dns_name.to_owned(), AsyncIoStdAsTokio(tcp)),
+                                    .connect(dns_name.to_owned(), DnsStreamAdapter(tcp)),
                             )),
                             query_path,
                         },

@@ -42,7 +42,7 @@ use crate::{
         op::{Header, LowerQuery, MessageType, ResponseCode, SerialMessage},
         rr::Record,
         runtime::TokioTime,
-        runtime::{TokioRuntimeProvider, iocompat::AsyncIoTokioAsStd},
+        runtime::{TokioRuntimeProvider, iocompat::TokioIoAdapter},
         serialize::binary::{BinDecodable, BinDecoder},
         tcp::TcpStream,
         udp::UdpStream,
@@ -532,7 +532,7 @@ async fn handle_tcp(
             debug!(%src_addr, "accepted TCP request");
             // take the created stream...
             let (buf_stream, stream_handle) =
-                TcpStream::from_stream(AsyncIoTokioAsStd(tcp_stream), src_addr);
+                TcpStream::from_stream(TokioIoAdapter(tcp_stream), src_addr);
             let mut timeout_stream = TimeoutStream::new(buf_stream, timeout);
 
             while let Some(message) = timeout_stream.next().await {
@@ -613,7 +613,7 @@ async fn handle_tls(
             };
 
             let tls_stream = match tls_stream {
-                Ok(tls_stream) => AsyncIoTokioAsStd(tls_stream),
+                Ok(tls_stream) => TokioIoAdapter(tls_stream),
                 Err(error) => {
                     debug!(%src_addr, %error, "tls handshake error");
                     return;

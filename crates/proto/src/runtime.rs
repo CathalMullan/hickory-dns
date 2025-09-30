@@ -40,12 +40,12 @@ pub mod iocompat {
     use crate::runtime::TokioTime;
     use crate::tcp::DnsTcpStream;
 
-    /// Adapter from `DnsTcpStream` to `tokio::io`.
-    pub struct AsyncIoStdAsTokio<S: DnsTcpStream>(pub S);
+    /// Adapter from `DnsTcpStream` to alternative IO traits.
+    pub struct DnsStreamAdapter<S: DnsTcpStream>(pub S);
 
-    impl<S: DnsTcpStream> Unpin for AsyncIoStdAsTokio<S> {}
+    impl<S: DnsTcpStream> Unpin for DnsStreamAdapter<S> {}
 
-    impl<S: DnsTcpStream> TokioAsyncRead for AsyncIoStdAsTokio<S> {
+    impl<S: DnsTcpStream> TokioAsyncRead for DnsStreamAdapter<S> {
         fn poll_read(
             mut self: Pin<&mut Self>,
             cx: &mut Context<'_>,
@@ -63,7 +63,7 @@ pub mod iocompat {
         }
     }
 
-    impl<S: DnsTcpStream> TokioAsyncWrite for AsyncIoStdAsTokio<S> {
+    impl<S: DnsTcpStream> TokioAsyncWrite for DnsStreamAdapter<S> {
         fn poll_write(
             mut self: Pin<&mut Self>,
             cx: &mut Context<'_>,
@@ -88,12 +88,12 @@ pub mod iocompat {
     }
 
     /// Adapter from `tokio::io` to `DnsTcpStream`.
-    pub struct AsyncIoTokioAsStd<T: TokioAsyncRead + TokioAsyncWrite + Unpin>(pub T);
+    pub struct TokioIoAdapter<T: TokioAsyncRead + TokioAsyncWrite + Unpin>(pub T);
 
-    impl<T: TokioAsyncRead + TokioAsyncWrite + Unpin> Unpin for AsyncIoTokioAsStd<T> {}
+    impl<T: TokioAsyncRead + TokioAsyncWrite + Unpin> Unpin for TokioIoAdapter<T> {}
 
     impl<T: TokioAsyncRead + TokioAsyncWrite + Unpin + Send + Sync + 'static> DnsTcpStream
-        for AsyncIoTokioAsStd<T>
+        for TokioIoAdapter<T>
     {
         type Time = TokioTime;
 
@@ -135,8 +135,8 @@ mod tokio_runtime {
     use tokio::time::timeout;
 
     #[cfg(feature = "__tls")]
-    use super::iocompat::AsyncIoStdAsTokio;
-    use super::iocompat::AsyncIoTokioAsStd;
+    use super::iocompat::DnsStreamAdapter;
+    use super::iocompat::TokioIoAdapter;
     use super::*;
     use crate::xfer::CONNECT_TIMEOUT;
 
@@ -172,9 +172,9 @@ mod tokio_runtime {
         type Handle = TokioHandle;
         type Timer = TokioTime;
         type Udp = TokioUdpSocket;
-        type Tcp = AsyncIoTokioAsStd<TcpStream>;
+        type Tcp = TokioIoAdapter<TcpStream>;
         #[cfg(feature = "__tls")]
-        type Tls = AsyncIoTokioAsStd<TlsStream<AsyncIoStdAsTokio<Self::Tcp>>>;
+        type Tls = TokioIoAdapter<TlsStream<DnsStreamAdapter<Self::Tcp>>>;
 
         fn create_handle(&self) -> Self::Handle {
             self.0.clone()
@@ -200,7 +200,7 @@ mod tokio_runtime {
                 let future = socket.connect(server_addr);
                 let wait_for = wait_for.unwrap_or(CONNECT_TIMEOUT);
                 match timeout(wait_for, future).await {
-                    Ok(Ok(socket)) => Ok(AsyncIoTokioAsStd(socket)),
+                    Ok(Ok(socket)) => Ok(TokioIoAdapter(socket)),
                     Ok(Err(e)) => Err(e),
                     Err(_) => Err(io::Error::new(
                         io::ErrorKind::TimedOut,
@@ -225,7 +225,7 @@ mod tokio_runtime {
             Box::pin(async move {
                 let s = match timeout(
                     CONNECT_TIMEOUT,
-                    tls_connector.connect(server_name, AsyncIoStdAsTokio(stream)),
+                    tls_connector.connect(server_name, DnsStreamAdapter(stream)),
                 )
                 .await
                 {
@@ -244,7 +244,7 @@ mod tokio_runtime {
                     }
                 };
 
-                Ok(AsyncIoTokioAsStd(s))
+                Ok(TokioIoAdapter(s))
             })
         }
 

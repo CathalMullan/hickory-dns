@@ -8,7 +8,7 @@ use {
         name_server::ConnectionProvider,
         proto::runtime::{
             RuntimeProvider, TokioHandle, TokioTime,
-            iocompat::{AsyncIoStdAsTokio, AsyncIoTokioAsStd},
+            iocompat::{DnsStreamAdapter, TokioIoAdapter},
         },
     },
     std::{future::Future, io, net::SocketAddr, pin::Pin, time::Duration},
@@ -30,8 +30,8 @@ impl RuntimeProvider for PrintProvider {
     type Handle = TokioHandle;
     type Timer = TokioTime;
     type Udp = UdpSocket;
-    type Tcp = AsyncIoTokioAsStd<TcpStream>;
-    type Tls = AsyncIoTokioAsStd<TlsStream<AsyncIoStdAsTokio<Self::Tcp>>>;
+    type Tcp = TokioIoAdapter<TcpStream>;
+    type Tls = TokioIoAdapter<TlsStream<DnsStreamAdapter<Self::Tcp>>>;
 
     fn create_handle(&self) -> Self::Handle {
         self.handle.clone()
@@ -57,7 +57,7 @@ impl RuntimeProvider for PrintProvider {
             let future = socket.connect(server_addr);
             let wait_for = wait_for.unwrap_or_else(|| Duration::from_secs(5));
             match timeout(wait_for, future).await {
-                Ok(Ok(socket)) => Ok(AsyncIoTokioAsStd(socket)),
+                Ok(Ok(socket)) => Ok(TokioIoAdapter(socket)),
                 Ok(Err(e)) => Err(e),
                 Err(_) => Err(io::Error::new(
                     io::ErrorKind::TimedOut,
@@ -80,7 +80,7 @@ impl RuntimeProvider for PrintProvider {
         let tls_connector = TlsConnector::from(client_config).early_data(early_data_enabled);
 
         Box::pin(async move {
-            let wrapped = AsyncIoStdAsTokio(stream);
+            let wrapped = DnsStreamAdapter(stream);
             let tls_stream = tls_connector
                 .connect(server_name, wrapped)
                 .await
@@ -89,7 +89,7 @@ impl RuntimeProvider for PrintProvider {
                 })?;
 
             println!("TLS connection established");
-            Ok(AsyncIoTokioAsStd(tls_stream))
+            Ok(TokioIoAdapter(tls_stream))
         })
     }
 
