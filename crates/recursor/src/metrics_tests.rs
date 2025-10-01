@@ -265,6 +265,10 @@ impl RuntimeProvider for MockProvider {
     ) -> Pin<Box<dyn Future<Output = io::Result<Self::Udp>> + Send>> {
         Box::pin(ready(Ok(MockUdpSocket::new(self.handler.clone()))))
     }
+
+    fn wrap_udp_socket(&self, _socket: std::net::UdpSocket) -> io::Result<Self::Udp> {
+        Ok(MockUdpSocket::new(self.handler.clone()))
+    }
 }
 
 struct MockUdpSocket {

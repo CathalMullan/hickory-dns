@@ -7,7 +7,7 @@
 
 use std::future::{Future, ready};
 use std::io;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
@@ -117,6 +117,10 @@ impl RuntimeProvider for MockRuntimeProvider {
         _server_addr: SocketAddr,
     ) -> Pin<Box<dyn Send + Future<Output = std::io::Result<Self::Udp>>>> {
         Box::pin(async { Ok(UdpPlaceholder) })
+    }
+
+    fn wrap_udp_socket(&self, _socket: UdpSocket) -> io::Result<Self::Udp> {
+        Ok(UdpPlaceholder)
     }
 }
 

@@ -7,6 +7,7 @@ use core::net::SocketAddr;
 use core::pin::Pin;
 use core::time::Duration;
 use std::io;
+use std::net::UdpSocket;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
@@ -269,6 +270,11 @@ mod tokio_runtime {
             Box::pin(tokio::net::UdpSocket::bind(local_addr))
         }
 
+        fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Self::Udp> {
+            socket.set_nonblocking(true)?;
+            TokioUdpSocket::from_std(socket)
+        }
+
         #[cfg(feature = "__quic")]
         fn quic_binder(&self) -> Option<&dyn QuicSocketBinder> {
             Some(&TokioQuicSocketBinder)
@@ -345,6 +351,9 @@ pub trait RuntimeProvider: Clone + Send + Sync + Unpin + 'static {
         local_addr: SocketAddr,
         server_addr: SocketAddr,
     ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Udp>>>>;
+
+    /// Wrap a UdpSocket into an async UDP socket.
+    fn wrap_udp_socket(&self, socket: UdpSocket) -> io::Result<Self::Udp>;
 
     /// Yields an object that knows how to bind a QUIC socket.
     //
