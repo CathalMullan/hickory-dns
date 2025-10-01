@@ -27,16 +27,13 @@ use h2::client::{Connection, SendRequest};
 use http::header::{self, CONTENT_LENGTH};
 use rustls::ClientConfig;
 use rustls::pki_types::ServerName;
-use tokio::time::{error, timeout};
-use tokio_rustls::{TlsConnector, client::TlsStream as TokioTlsClientStream};
 use tracing::{debug, warn};
 
 use crate::error::ProtoError;
 use crate::http::Version;
 use crate::op::{DnsRequest, DnsResponse};
-use crate::runtime::RuntimeProvider;
 use crate::runtime::iocompat::DnsStreamAdapter;
-use crate::tcp::DnsTcpStream;
+use crate::runtime::{RuntimeProvider, Spawn, Time};
 use crate::xfer::{CONNECT_TIMEOUT, DnsRequestSender, DnsResponseStream};
 
 const ALPN_H2: &[u8] = b"h2";
@@ -294,7 +291,7 @@ impl Stream for HttpsClientStream {
 
 /// A HTTPS connection builder for DNS-over-HTTPS
 #[derive(Clone)]
-pub struct HttpsClientStreamBuilder<P> {
+pub struct HttpsClientStreamBuilder<P: RuntimeProvider> {
     provider: P,
     client_config: Arc<ClientConfig>,
     bind_addr: Option<SocketAddr>,
@@ -327,7 +324,7 @@ impl<P: RuntimeProvider> HttpsClientStreamBuilder<P> {
         name_server: SocketAddr,
         server_name: Arc<str>,
         path: Arc<str>,
-    ) -> HttpsClientConnect<P::Tcp> {
+    ) -> HttpsClientConnect<P> {
         // ensure the ALPN protocol is set correctly
         if self.client_config.alpn_protocols.is_empty() {
             let mut client_config = (*self.client_config).clone();
@@ -343,20 +340,22 @@ impl<P: RuntimeProvider> HttpsClientStreamBuilder<P> {
         };
 
         let connect = self.provider.connect_tcp(name_server, self.bind_addr, None);
+        let handle = self.provider.create_handle();
+
         HttpsClientConnect(HttpsClientConnectState::TcpConnecting {
             connect,
             name_server,
             tls: Some(tls),
+            provider: self.provider,
+            handle,
         })
     }
 }
 
 /// A future that resolves to an HttpsClientStream
-pub struct HttpsClientConnect<S>(HttpsClientConnectState<S>)
-where
-    S: DnsTcpStream;
+pub struct HttpsClientConnect<P: RuntimeProvider>(HttpsClientConnectState<P>);
 
-impl<S: DnsTcpStream> HttpsClientConnect<S> {
+impl<P: RuntimeProvider> HttpsClientConnect<P> {
     /// Creates a new HttpsStream with existing connection
     pub fn new<F>(
         future: F,
@@ -364,10 +363,10 @@ impl<S: DnsTcpStream> HttpsClientConnect<S> {
         name_server: SocketAddr,
         server_name: Arc<str>,
         path: Arc<str>,
+        provider: P,
     ) -> Self
     where
-        S: DnsTcpStream,
-        F: Future<Output = std::io::Result<S>> + Send + Unpin + 'static,
+        F: Future<Output = std::io::Result<P::Tcp>> + Send + Unpin + 'static,
     {
         // ensure the ALPN protocol is set correctly
         if client_config.alpn_protocols.is_empty() {
@@ -383,18 +382,19 @@ impl<S: DnsTcpStream> HttpsClientConnect<S> {
             path,
         };
 
+        let handle = provider.create_handle();
+
         Self(HttpsClientConnectState::TcpConnecting {
             connect: Box::pin(future),
             name_server,
             tls: Some(tls),
+            provider,
+            handle,
         })
     }
 }
 
-impl<S> Future for HttpsClientConnect<S>
-where
-    S: DnsTcpStream,
-{
+impl<P: RuntimeProvider> Future for HttpsClientConnect<P> {
     type Output = Result<HttpsClientStream, io::Error>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -409,24 +409,20 @@ struct TlsConfig {
 }
 
 #[allow(clippy::type_complexity)]
-enum HttpsClientConnectState<S>
-where
-    S: DnsTcpStream,
-{
+enum HttpsClientConnectState<P: RuntimeProvider> {
     TcpConnecting {
-        connect: BoxFuture<'static, io::Result<S>>,
+        connect: BoxFuture<'static, io::Result<P::Tcp>>,
         name_server: SocketAddr,
         tls: Option<TlsConfig>,
+        provider: P,
+        handle: P::Handle,
     },
     TlsConnecting {
-        // TODO: also abstract away Tokio TLS in RuntimeProvider.
-        tls: BoxFuture<
-            'static,
-            Result<Result<TokioTlsClientStream<DnsStreamAdapter<S>>, io::Error>, error::Elapsed>,
-        >,
+        tls: BoxFuture<'static, Result<P::Tls, io::Error>>,
         name_server_name: Arc<str>,
         name_server: SocketAddr,
         query_path: Arc<str>,
+        handle: P::Handle,
     },
     H2Handshake {
         handshake: BoxFuture<
@@ -434,7 +430,7 @@ where
             Result<
                 (
                     SendRequest<Bytes>,
-                    Connection<TokioTlsClientStream<DnsStreamAdapter<S>>, Bytes>,
+                    Connection<DnsStreamAdapter<P::Tls>, Bytes>,
                 ),
                 h2::Error,
             >,
@@ -442,15 +438,13 @@ where
         name_server_name: Arc<str>,
         name_server: SocketAddr,
         query_path: Arc<str>,
+        handle: P::Handle,
     },
     Connected(Option<HttpsClientStream>),
     Errored(Option<io::Error>),
 }
 
-impl<S> Future for HttpsClientConnectState<S>
-where
-    S: DnsTcpStream,
-{
+impl<P: RuntimeProvider> Future for HttpsClientConnectState<P> {
     type Output = Result<HttpsClientStream, io::Error>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -460,6 +454,8 @@ where
                     connect,
                     name_server,
                     tls,
+                    provider,
+                    handle,
                 } => {
                     let tcp = ready!(connect.poll_unpin(cx))?;
 
@@ -471,16 +467,30 @@ where
                     let query_path = tls.path.clone();
 
                     match ServerName::try_from(&*tls.server_name) {
-                        Ok(dns_name) => Self::TlsConnecting {
-                            name_server_name,
-                            name_server: *name_server,
-                            tls: Box::pin(timeout(
-                                CONNECT_TIMEOUT,
-                                TlsConnector::from(tls.client_config)
-                                    .connect(dns_name.to_owned(), DnsStreamAdapter(tcp)),
-                            )),
-                            query_path,
-                        },
+                        Ok(dns_name) => {
+                            let tls_future =
+                                provider.connect_tls(tcp, dns_name.to_owned(), tls.client_config);
+
+                            let tls_timeout_future = async move {
+                                match P::Timer::timeout(CONNECT_TIMEOUT, tls_future).await {
+                                    Ok(result) => result,
+                                    Err(_) => Err(io::Error::new(
+                                        io::ErrorKind::TimedOut,
+                                        format!(
+                                            "TLS handshake timed out after {CONNECT_TIMEOUT:?}"
+                                        ),
+                                    )),
+                                }
+                            };
+
+                            Self::TlsConnecting {
+                                name_server_name,
+                                name_server: *name_server,
+                                tls: Box::pin(tls_timeout_future),
+                                query_path,
+                                handle: handle.clone(),
+                            }
+                        }
                         Err(err) => Self::Errored(Some(io::Error::new(
                             io::ErrorKind::InvalidData,
                             format!("bad server name {:?}: {err}", &tls.server_name),
@@ -492,28 +502,23 @@ where
                     name_server,
                     query_path,
                     tls,
+                    handle,
                 } => {
-                    let res = match ready!(tls.poll_unpin(cx)) {
-                        Ok(res) => res,
-                        Err(_) => {
-                            return Poll::Ready(Err(io::Error::new(
-                                io::ErrorKind::TimedOut,
-                                format!("TLS handshake timed out after {CONNECT_TIMEOUT:?}"),
-                            )));
-                        }
-                    };
+                    let tls = ready!(tls.poll_unpin(cx))?;
 
-                    let tls = res?;
                     debug!("tls connection established to: {}", name_server);
                     let mut handshake = h2::client::Builder::new();
                     handshake.enable_push(false);
 
+                    let tls = DnsStreamAdapter(tls);
                     let handshake = handshake.handshake(tls);
+
                     Self::H2Handshake {
                         name_server_name: Arc::clone(name_server_name),
                         name_server: *name_server,
                         query_path: Arc::clone(query_path),
                         handshake: Box::pin(handshake),
+                        handle: handle.clone(),
                     }
                 }
                 Self::H2Handshake {
@@ -521,6 +526,7 @@ where
                     name_server,
                     query_path,
                     handshake,
+                    handle,
                 } => {
                     let (send_request, connection) = ready!(
                         handshake
@@ -530,7 +536,10 @@ where
 
                     // TODO: hand this back for others to run rather than spawning here?
                     debug!("h2 connection established to: {}", name_server);
-                    tokio::spawn(async {
+
+                    // Spawn the h2 connection as a detached background task
+                    let mut handle = handle.clone();
+                    handle.spawn_detached(async move {
                         if let Err(e) = connection.await {
                             warn!("h2 connection failed: {e}");
                         }

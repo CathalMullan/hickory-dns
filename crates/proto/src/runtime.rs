@@ -147,13 +147,21 @@ mod tokio_runtime {
     }
 
     impl Spawn for TokioHandle {
-        fn spawn_bg<F>(&mut self, future: F)
+        fn spawn_tracked<F>(&mut self, future: F)
         where
             F: Future<Output = Result<(), ProtoError>> + Send + 'static,
         {
             let mut join_set = self.join_set.lock().unwrap();
             join_set.spawn(future);
             reap_tasks(&mut join_set);
+        }
+
+        fn spawn_detached<F, R>(&mut self, future: F)
+        where
+            F: Future<Output = R> + Send + 'static,
+            R: Send + 'static,
+        {
+            tokio::spawn(future);
         }
     }
 
@@ -360,10 +368,16 @@ pub trait QuicSocketBinder {
 
 /// A type defines the Handle which can spawn future.
 pub trait Spawn {
-    /// Spawn a future in the background
-    fn spawn_bg<F>(&mut self, future: F)
+    /// Spawn a tracked future.
+    fn spawn_tracked<F>(&mut self, future: F)
     where
         F: Future<Output = Result<(), ProtoError>> + Send + 'static;
+
+    /// Spawn a detached future.
+    fn spawn_detached<F, R>(&mut self, future: F)
+    where
+        F: Future<Output = R> + Send + 'static,
+        R: Send + 'static;
 }
 
 /// Generic executor.
