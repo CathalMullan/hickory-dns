@@ -37,6 +37,7 @@ std = [
     "thiserror/std",
     "tracing/std",
     "url/std",
+    "dep:tokio",
 ]
 
 tls-aws-lc-rs = ["tokio-rustls/aws-lc-rs", "__tls"]
@@ -62,7 +63,7 @@ __dnssec = ["dep:bitflags", "dep:rustls-pki-types", "dep:time", "std"]
 testing = ["std"]
 
 text-parsing = ["std"]
-tokio = ["dep:tokio", "std", "tokio/net", "tokio/rt", "tokio/time", "tokio/rt-multi-thread"]
+tokio = ["std", "tokio/rt", "tokio/rt-multi-thread", "tokio/net"]
 default = ["std", "tokio"]
 
 serde = ["dep:serde", "std", "url/serde"]
@@ -115,7 +116,7 @@ thiserror.workspace = true
 time = { workspace = true, optional = true }
 tinyvec = { workspace = true, features = ["alloc"] }
 tracing = { workspace = true, default-features = false }
-tokio = { workspace = true, features = ["io-util"], optional = true }
+tokio = { workspace = true, optional = true, features = ["time", "io-util"] }
 tokio-rustls = { workspace = true, optional = true, features = ["early-data"] }
 url = { workspace = true }
 wasm-bindgen-crate = { workspace = true, optional = true }
