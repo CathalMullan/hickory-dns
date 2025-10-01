@@ -220,7 +220,7 @@ impl<P: RuntimeProvider> ConnectionProvider for P {
                 });
 
                 Connecting::H3(DnsExchange::connect(
-                    H3ClientStream::builder()
+                    H3ClientStream::builder(self.clone())
                         .crypto_config(cx.tls.config.clone())
                         .disable_grease(*disable_grease)
                         .build_with_future(

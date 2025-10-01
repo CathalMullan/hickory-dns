@@ -11,14 +11,14 @@ use alloc::sync::Arc;
 use core::fmt::{self, Display};
 use core::future::{Future, poll_fn};
 use core::net::SocketAddr;
-use core::pin::Pin;
+use core::pin::{Pin, pin};
 use core::str::FromStr;
 use core::task::{Context, Poll};
 use std::io;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use futures_util::{
-    future::{BoxFuture, FutureExt},
+    future::{BoxFuture, Either, FutureExt, select},
     stream::Stream,
 };
 use h3::client::SendRequest;
@@ -32,8 +32,8 @@ use crate::error::ProtoError;
 use crate::http::Version;
 use crate::op::{DnsRequest, DnsResponse};
 use crate::quic::connect_quic;
+use crate::runtime::{QuinnAdapter, RuntimeProvider, Spawn};
 use crate::rustls::client_config;
-use crate::udp::UdpSocket;
 use crate::xfer::{DnsRequestSender, DnsResponseStream};
 
 use super::ALPN_H3;
@@ -53,8 +53,9 @@ pub struct H3ClientStream {
 
 impl H3ClientStream {
     /// Builder for H3ClientStream
-    pub fn builder() -> H3ClientStreamBuilder {
+    pub fn builder<P: RuntimeProvider>(provider: P) -> H3ClientStreamBuilder<P> {
         H3ClientStreamBuilder {
+            provider,
             crypto_config: None,
             transport_config: Arc::new(super::transport()),
             bind_addr: None,
@@ -298,15 +299,15 @@ impl Display for H3ClientStream {
 }
 
 /// A H3 connection builder for DNS-over-HTTP/3
-#[derive(Clone)]
-pub struct H3ClientStreamBuilder {
+pub struct H3ClientStreamBuilder<P: RuntimeProvider> {
+    provider: P,
     crypto_config: Option<rustls::ClientConfig>,
     transport_config: Arc<TransportConfig>,
     bind_addr: Option<SocketAddr>,
     disable_grease: bool,
 }
 
-impl H3ClientStreamBuilder {
+impl<P: RuntimeProvider> H3ClientStreamBuilder<P> {
     /// Constructs a new H3ClientStreamBuilder with the associated ClientConfig
     pub fn crypto_config(mut self, crypto_config: rustls::ClientConfig) -> Self {
         self.crypto_config = Some(crypto_config);
@@ -364,7 +365,7 @@ impl H3ClientStreamBuilder {
             EndpointConfig::default(),
             None,
             socket,
-            Arc::new(quinn::TokioRuntime),
+            Arc::new(QuinnAdapter::new(self.provider.clone())),
         )?;
         self.connect_inner(endpoint, name_server, server_name, path)
             .await
@@ -376,20 +377,29 @@ impl H3ClientStreamBuilder {
         server_name: Arc<str>,
         path: Arc<str>,
     ) -> Result<H3ClientStream, io::Error> {
-        let connect = if let Some(bind_addr) = self.bind_addr {
-            <tokio::net::UdpSocket as UdpSocket>::connect_with_bind(name_server, bind_addr)
-        } else {
-            <tokio::net::UdpSocket as UdpSocket>::connect(name_server)
+        let Some(quic_binder) = self.provider.quic_binder() else {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "QUIC not supported by this runtime provider",
+            ));
         };
 
-        let socket = connect.await?;
-        let socket = socket.into_std()?;
-        let endpoint = Endpoint::new(
+        let bind_addr = self.bind_addr.unwrap_or_else(|| {
+            if name_server.is_ipv4() {
+                SocketAddr::from(([0, 0, 0, 0], 0))
+            } else {
+                SocketAddr::from(([0, 0, 0, 0, 0, 0, 0, 0], 0))
+            }
+        });
+
+        let socket = quic_binder.bind_quic(bind_addr, name_server)?;
+        let endpoint = Endpoint::new_with_abstract_socket(
             EndpointConfig::default(),
             None,
             socket,
-            Arc::new(quinn::TokioRuntime),
+            Arc::new(QuinnAdapter::new(self.provider.clone())),
         )?;
+
         self.connect_inner(endpoint, name_server, server_name, path)
             .await
     }
@@ -430,15 +440,20 @@ impl H3ClientStreamBuilder {
 
         // TODO: hand this back for others to run rather than spawning here?
         debug!("h3 connection is ready: {}", name_server);
-        tokio::spawn(async move {
-            tokio::select! {
-                error = poll_fn(|cx| driver.poll_close(cx)) => {
+
+        let mut handle = self.provider.create_handle();
+        handle.spawn_detached(async move {
+            let driver_future = pin!(poll_fn(|cx| driver.poll_close(cx)));
+            let shutdown_future = pin!(shutdown_rx.recv());
+
+            match select(driver_future, shutdown_future).await {
+                Either::Left((error, _)) => {
                     // `poll_close()` strangely unconditionally returns a `ConnectionError`
                     if !error.is_h3_no_error() {
                         warn!(%error, "h3 connection failed to close")
                     }
                 }
-                _ = shutdown_rx.recv() => {
+                Either::Right((_, _)) => {
                     debug!("h3 connection is shutting down: {}", name_server);
                 }
             }
@@ -495,6 +510,7 @@ mod tests {
     use super::*;
     use crate::op::{DnsRequestOptions, Edns, Message, Query};
     use crate::rr::{Name, RecordType};
+    use crate::runtime::TokioRuntimeProvider;
     use crate::xfer::FirstAnswer;
 
     #[tokio::test]
@@ -516,7 +532,8 @@ mod tests {
         let mut client_config = client_config().unwrap();
         client_config.key_log = Arc::new(KeyLogFile::new());
 
-        let mut h3 = H3ClientStream::builder()
+        let provider = TokioRuntimeProvider::new();
+        let mut h3 = H3ClientStream::builder(provider)
             .crypto_config(client_config)
             .build(google, Arc::from("dns.google"), Arc::from("/dns-query"))
             .await
@@ -584,7 +601,8 @@ mod tests {
         let mut client_config = client_config().unwrap();
         client_config.key_log = Arc::new(KeyLogFile::new());
 
-        let mut h3 = H3ClientStream::builder()
+        let provider = TokioRuntimeProvider::new();
+        let mut h3 = H3ClientStream::builder(provider)
             .crypto_config(client_config)
             .build(
                 google,
@@ -656,7 +674,8 @@ mod tests {
         let mut client_config = client_config().unwrap();
         client_config.key_log = Arc::new(KeyLogFile::new());
 
-        let connect = H3ClientStream::builder()
+        let provider = TokioRuntimeProvider::new();
+        let connect = H3ClientStream::builder(provider)
             .crypto_config(client_config)
             // Currently CF is using a broken GREASE implementation, see <https://github.com/hyperium/h3/issues/206>.
             .disable_grease(true)
@@ -720,7 +739,8 @@ mod tests {
         let mut client_config = client_config().unwrap();
         client_config.key_log = Arc::new(KeyLogFile::new());
 
-        let h3 = H3ClientStream::builder()
+        let provider = TokioRuntimeProvider::new();
+        let h3 = H3ClientStream::builder(provider)
             .crypto_config(client_config)
             .build(google, Arc::from("dns.google"), Arc::from("/dns-query"))
             .await

@@ -115,7 +115,7 @@ thiserror.workspace = true
 time = { workspace = true, optional = true }
 tinyvec = { workspace = true, features = ["alloc"] }
 tracing = { workspace = true, default-features = false }
-tokio = { workspace = true, features = ["io-util", "macros"], optional = true }
+tokio = { workspace = true, features = ["io-util"], optional = true }
 tokio-rustls = { workspace = true, optional = true, features = ["early-data"] }
 url = { workspace = true }
 wasm-bindgen-crate = { workspace = true, optional = true }

@@ -19,6 +19,11 @@ use crate::error::ProtoError;
 use crate::tcp::DnsTcpStream;
 use crate::udp::DnsUdpSocket;
 
+#[cfg(feature = "__quic")]
+mod quinn_adapter;
+#[cfg(feature = "__quic")]
+pub use quinn_adapter::QuinnAdapter;
+
 /// Spawn a background task, if it was present
 #[cfg(any(test, feature = "tokio"))]
 pub fn spawn_bg<F: Future<Output = R> + Send + 'static, R: Send + 'static>(
@@ -361,8 +366,8 @@ pub trait QuicSocketBinder {
     /// Create a UDP socket for QUIC usage.
     fn bind_quic(
         &self,
-        _local_addr: SocketAddr,
-        _server_addr: SocketAddr,
+        local_addr: SocketAddr,
+        server_addr: SocketAddr,
     ) -> Result<alloc::sync::Arc<dyn quinn::AsyncUdpSocket>, io::Error>;
 }
 
