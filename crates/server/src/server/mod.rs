@@ -354,19 +354,21 @@ impl<P: RuntimeProvider, T: RequestHandler> Server<P, T> {
     #[cfg(feature = "__h3")]
     pub fn register_h3_listener(
         &mut self,
-        socket: net::UdpSocket,
+        local_addr: SocketAddr,
         // TODO: need to set a timeout between requests.
         _timeout: Duration,
         server_cert_resolver: Arc<dyn ResolvesServerCert>,
         dns_hostname: Option<String>,
-    ) -> io::Result<()> {
-        self.join_set.spawn(h3_handler::handle_h3(
-            socket,
-            server_cert_resolver,
-            dns_hostname,
-            self.context.clone(),
-        ));
-        Ok(())
+    ) -> io::Result<SocketAddr> {
+        let h3_server =
+            H3Server::with_socket(self.provider.clone(), local_addr, server_cert_resolver)?;
+        let local_addr = h3_server.local_addr()?;
+
+        let cx = self.context.clone();
+        self.join_set
+            .spawn(h3_handler::handle_h3(h3_server, dns_hostname, cx));
+
+        Ok(local_addr)
     }
 
     /// Register a UdpSocket for supporting DoH3 (DNS-over-HTTP/3) with the specified TLS config.
@@ -389,18 +391,21 @@ impl<P: RuntimeProvider, T: RequestHandler> Server<P, T> {
     #[cfg(feature = "__h3")]
     pub fn register_h3_listener_with_tls_config(
         &mut self,
-        socket: net::UdpSocket,
+        local_addr: SocketAddr,
         // TODO: need to set a timeout between requests.
         _timeout: Duration,
         tls_config: Arc<ServerConfig>,
         dns_hostname: Option<String>,
-    ) -> io::Result<()> {
-        self.join_set.spawn(h3_handler::handle_h3_with_server(
-            H3Server::with_socket_and_tls_config(socket, tls_config)?,
-            dns_hostname,
-            self.context.clone(),
-        ));
-        Ok(())
+    ) -> io::Result<SocketAddr> {
+        let h3_server =
+            H3Server::with_socket_and_tls_config(self.provider.clone(), local_addr, tls_config)?;
+        let local_addr = h3_server.local_addr()?;
+
+        let cx = self.context.clone();
+        self.join_set
+            .spawn(h3_handler::handle_h3(h3_server, dns_hostname, cx));
+
+        Ok(local_addr)
     }
 
     /// Triggers a graceful shutdown the server. All background tasks will stop accepting
@@ -1182,12 +1187,7 @@ mod tests {
             {
                 let cert_key = rustls_cert_key();
                 server
-                    .register_h3_listener(
-                        UdpSocket::bind(self.h3_addr).await.unwrap(),
-                        Duration::from_secs(1),
-                        cert_key,
-                        None,
-                    )
+                    .register_h3_listener(self.h3_addr, Duration::from_secs(1), cert_key, None)
                     .unwrap();
             }
         }

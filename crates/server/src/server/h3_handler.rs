@@ -11,8 +11,7 @@ use bytes::{Buf, Bytes};
 use futures_util::lock::Mutex;
 use h3::server::RequestStream;
 use h3_quinn::BidiStream;
-use rustls::server::ResolvesServerCert;
-use tokio::{net, task::JoinSet};
+use tokio::task::JoinSet;
 use tracing::{debug, error, warn};
 
 use super::{
@@ -36,18 +35,12 @@ use crate::{
 };
 
 pub(super) async fn handle_h3(
-    socket: net::UdpSocket,
-    server_cert_resolver: Arc<dyn ResolvesServerCert>,
+    server: H3Server,
     dns_hostname: Option<String>,
     cx: Arc<ServerContext<impl RequestHandler>>,
 ) -> Result<(), ProtoError> {
-    debug!("registered h3: {:?}", socket);
-    handle_h3_with_server(
-        H3Server::with_socket(socket, server_cert_resolver)?,
-        dns_hostname,
-        cx,
-    )
-    .await
+    debug!("registered h3");
+    handle_h3_with_server(server, dns_hostname, cx).await
 }
 
 pub(super) async fn handle_h3_with_server(
