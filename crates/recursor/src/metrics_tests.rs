@@ -260,19 +260,26 @@ impl RuntimeProvider for MockProvider {
 
     fn bind_udp(
         &self,
-        _local_addr: SocketAddr,
+        local_addr: SocketAddr,
         _server_addr: SocketAddr,
     ) -> Pin<Box<dyn Future<Output = io::Result<Self::Udp>> + Send>> {
-        Box::pin(ready(Ok(MockUdpSocket::new(self.handler.clone()))))
+        Box::pin(ready(Ok(MockUdpSocket::new(
+            local_addr,
+            self.handler.clone(),
+        ))))
     }
 
-    fn wrap_udp_socket(&self, _socket: std::net::UdpSocket) -> io::Result<Self::Udp> {
-        Ok(MockUdpSocket::new(self.handler.clone()))
+    fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Self::Udp> {
+        Ok(MockUdpSocket::new(
+            socket.local_addr()?,
+            self.handler.clone(),
+        ))
     }
 }
 
 struct MockUdpSocket {
     inner: Mutex<MockUdpSocketInner>,
+    addr: SocketAddr,
     handler: Arc<dyn MockHandler + Send + Sync + 'static>,
 }
 
@@ -284,12 +291,13 @@ struct MockUdpSocketInner {
 }
 
 impl MockUdpSocket {
-    fn new(handler: Arc<dyn MockHandler + Send + Sync + 'static>) -> Self {
+    fn new(addr: SocketAddr, handler: Arc<dyn MockHandler + Send + Sync + 'static>) -> Self {
         Self {
             inner: Mutex::new(MockUdpSocketInner {
                 incoming_datagrams: VecDeque::new(),
                 waker: None,
             }),
+            addr,
             handler,
         }
     }
@@ -297,6 +305,10 @@ impl MockUdpSocket {
 
 impl DnsUdpSocket for MockUdpSocket {
     type Time = TokioTime;
+
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        Ok(self.addr)
+    }
 
     fn poll_recv_from(
         &self,

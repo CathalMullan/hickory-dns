@@ -15,7 +15,8 @@ use rustls::server::ResolvesServerCert;
 use rustls::server::ServerConfig as TlsServerConfig;
 use rustls::version::TLS13;
 
-use crate::{error::ProtoError, rustls::default_provider, udp::UdpSocket};
+use crate::runtime::{QuinnAdapter, RuntimeProvider};
+use crate::{error::ProtoError, rustls::default_provider};
 
 use super::{
     quic_config,
@@ -29,18 +30,18 @@ pub struct QuicServer {
 
 impl QuicServer {
     /// Construct the new Acceptor with the associated pkcs12 data
-    pub async fn new(
+    pub async fn new<P: RuntimeProvider>(
+        provider: P,
         name_server: SocketAddr,
         server_cert_resolver: Arc<dyn ResolvesServerCert>,
     ) -> Result<Self, ProtoError> {
-        // setup a new socket for the server to use
-        let socket = <tokio::net::UdpSocket as UdpSocket>::bind(name_server).await?;
-        Self::with_socket(socket, server_cert_resolver)
+        Self::with_socket(provider, name_server, server_cert_resolver)
     }
 
     /// Construct the new server with an existing socket and a default TLS configuration
-    pub fn with_socket(
-        socket: tokio::net::UdpSocket,
+    pub fn with_socket<P: RuntimeProvider>(
+        provider: P,
+        local_addr: SocketAddr,
         server_cert_resolver: Arc<dyn ResolvesServerCert>,
     ) -> Result<Self, ProtoError> {
         let mut config = TlsServerConfig::builder_with_provider(Arc::new(default_provider()))
@@ -51,28 +52,33 @@ impl QuicServer {
 
         config.alpn_protocols = vec![quic_stream::DOQ_ALPN.to_vec()];
 
-        Self::with_socket_and_tls_config(socket, Arc::new(config))
+        Self::with_socket_and_tls_config(provider, local_addr, Arc::new(config))
     }
 
     /// Construct the new server with an existing socket and a custom TLS configuration
     ///
     /// The caller must ensure the `TlsServerConfig` has the appropriate DoQ ALPN protocol enabled.
-    pub fn with_socket_and_tls_config(
-        socket: tokio::net::UdpSocket,
+    pub fn with_socket_and_tls_config<P: RuntimeProvider>(
+        provider: P,
+        local_addr: SocketAddr,
         tls_config: Arc<TlsServerConfig>,
     ) -> Result<Self, ProtoError> {
+        let quic_binder = provider
+            .quic_binder()
+            .ok_or_else(|| ProtoError::from("QUIC support not available in this runtime"))?;
+
+        let quic_socket = quic_binder.bind_quic(local_addr, local_addr)?;
+
         let mut server_config =
             ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(tls_config)?));
         server_config.transport = Arc::new(quic_config::transport());
 
-        let socket = socket.into_std()?;
-
         let endpoint_config = quic_config::endpoint();
-        let endpoint = Endpoint::new(
+        let endpoint = Endpoint::new_with_abstract_socket(
             endpoint_config,
             Some(server_config),
-            socket,
-            Arc::new(quinn::TokioRuntime),
+            quic_socket,
+            Arc::new(QuinnAdapter::new(provider.clone())),
         )?;
 
         Ok(Self { endpoint })

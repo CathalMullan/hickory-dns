@@ -26,6 +26,7 @@ use crate::{
     op::{Message, Query},
     quic::QuicClientStreamBuilder,
     rr::{Name, RecordType},
+    runtime::TokioRuntimeProvider,
     rustls::default_provider,
     xfer::DnsRequestSender,
 };
@@ -72,7 +73,9 @@ async fn test_quic_stream() {
     );
 
     // All testing is only done on local addresses, construct the server
+    let provider = TokioRuntimeProvider::new();
     let quic_ns = QuicServer::new(
+        provider,
         SocketAddr::from(([127, 0, 0, 1], 0)),
         Arc::new(certificate_and_key),
     )

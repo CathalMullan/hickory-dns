@@ -36,6 +36,9 @@ where
     /// Time implementation used for this type
     type Time: Time;
 
+    /// Get the local address this socket is bound to
+    fn local_addr(&self) -> io::Result<SocketAddr>;
+
     /// Poll once Receive data from the socket and returns the number of bytes read and the address from
     /// where the data came on success.
     fn poll_recv_from(
@@ -378,6 +381,10 @@ impl UdpSocket for tokio::net::UdpSocket {
 #[async_trait]
 impl DnsUdpSocket for tokio::net::UdpSocket {
     type Time = crate::runtime::TokioTime;
+
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        Self::local_addr(self)
+    }
 
     fn poll_recv_from(
         &self,

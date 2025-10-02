@@ -56,6 +56,10 @@ pub struct UdpPlaceholder;
 impl DnsUdpSocket for UdpPlaceholder {
     type Time = TokioTime;
 
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        Ok(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0))
+    }
+
     fn poll_recv_from(
         &self,
         _cx: &mut Context<'_>,

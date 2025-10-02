@@ -257,7 +257,10 @@ async fn no_synthesis_5() {
 /// subdel.example.          3600     NS    ns.example.com.
 /// subdel.example.          3600     NS    ns.example.net.
 /// ```
-async fn setup() -> (Client<TokioRuntimeProvider>, Server<Catalog>) {
+async fn setup() -> (
+    Client<TokioRuntimeProvider>,
+    Server<TokioRuntimeProvider, Catalog>,
+) {
     // Zone setup
     let origin = Name::parse("example.", None).unwrap();
 
@@ -382,9 +385,10 @@ async fn setup() -> (Client<TokioRuntimeProvider>, Server<Catalog>) {
     catalog.upsert(origin.into(), vec![Arc::new(handler)]);
 
     // Server setup
+    let provider = TokioRuntimeProvider::new();
     let udp_socket = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
     let local_addr = udp_socket.local_addr().unwrap();
-    let mut server = Server::new(catalog);
+    let mut server = Server::new(provider, catalog);
     server.register_socket(udp_socket);
 
     // Client setup

@@ -344,8 +344,9 @@ fn new_catalog() -> Catalog {
 }
 
 async fn server_thread_udp(udp_socket: UdpSocket, server_continue: Arc<AtomicBool>) {
+    let provider = TokioRuntimeProvider::new();
     let catalog = new_catalog();
-    let mut server = Server::new(catalog);
+    let mut server = Server::new(provider, catalog);
     server.register_socket(udp_socket);
 
     while server_continue.load(Ordering::Relaxed) {
@@ -356,8 +357,16 @@ async fn server_thread_udp(udp_socket: UdpSocket, server_continue: Arc<AtomicBoo
 }
 
 async fn server_thread_tcp(tcp_listener: TcpListener, server_continue: Arc<AtomicBool>) {
+    let provider = TokioRuntimeProvider::new();
     let catalog = new_catalog();
-    let mut server = Server::new(catalog);
+    let mut server = Server::new(provider, catalog);
+
+    // let pkcs12 = Pkcs12::from_der(&pkcs12_der)
+    //     .expect("bad pkcs12 der")
+    //     .parse("mypass")
+    //     .expect("Pkcs12::from_der");
+    // let pkcs12 = ((pkcs12.cert, pkcs12.chain), pkcs12.pkey);
+
     server.register_listener(tcp_listener, Duration::from_secs(30));
 
     while server_continue.load(Ordering::Relaxed) {
@@ -373,14 +382,9 @@ async fn server_thread_tls(
     server_continue: Arc<AtomicBool>,
     cert_chain: Arc<dyn ResolvesServerCert>,
 ) {
+    let provider = TokioRuntimeProvider::new();
     let catalog = new_catalog();
-    let mut server = Server::new(catalog);
-
-    // let pkcs12 = Pkcs12::from_der(&pkcs12_der)
-    //     .expect("bad pkcs12 der")
-    //     .parse("mypass")
-    //     .expect("Pkcs12::from_der");
-    // let pkcs12 = ((pkcs12.cert, pkcs12.chain), pkcs12.pkey);
+    let mut server = Server::new(provider, catalog);
 
     server
         .register_tls_listener(tls_listener, Duration::from_secs(30), cert_chain)

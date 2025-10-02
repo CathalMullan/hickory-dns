@@ -23,6 +23,7 @@ use hickory_proto::{
         DNSClass, RData, Record, RecordType,
         rdata::{A, AAAA, HINFO, MX, NS, SOA},
     },
+    runtime::TokioRuntimeProvider,
 };
 use hickory_resolver::Name;
 use hickory_server::{
@@ -37,9 +38,11 @@ use test_support::subscribe;
 async fn name_error() {
     subscribe();
 
+    let provider = TokioRuntimeProvider::new();
     let (key, public_key) = generate_key();
     let catalog = example_zone_catalog(key);
-    let (mut client, _honest_server) = setup_dnssec_client_server(catalog, &public_key).await;
+    let (mut client, _honest_server) =
+        setup_dnssec_client_server(provider, catalog, &public_key).await;
 
     let query_name = Name::parse("ml.example.", None).unwrap();
     let query_type = RecordType::A;
@@ -84,9 +87,11 @@ async fn name_error() {
 async fn no_data_error() {
     subscribe();
 
+    let provider = TokioRuntimeProvider::new();
     let (key, public_key) = generate_key();
     let catalog = example_zone_catalog(key);
-    let (mut client, _honest_server) = setup_dnssec_client_server(catalog, &public_key).await;
+    let (mut client, _honest_server) =
+        setup_dnssec_client_server(provider, catalog, &public_key).await;
 
     let query_name = Name::parse("ns1.example.", None).unwrap();
     let query_type = RecordType::MX;
@@ -122,9 +127,11 @@ async fn no_data_error() {
 async fn wildcard_expansion() {
     subscribe();
 
+    let provider = TokioRuntimeProvider::new();
     let (key, public_key) = generate_key();
     let catalog = example_zone_catalog(key);
-    let (mut client, _honest_server) = setup_dnssec_client_server(catalog, &public_key).await;
+    let (mut client, _honest_server) =
+        setup_dnssec_client_server(provider, catalog, &public_key).await;
 
     let query_name = Name::parse("a.z.w.example.", None).unwrap();
     let query_type = RecordType::MX;
@@ -160,9 +167,11 @@ async fn wildcard_expansion() {
 async fn wildcard_no_data_error() {
     subscribe();
 
+    let provider = TokioRuntimeProvider::new();
     let (key, public_key) = generate_key();
     let catalog = example_zone_catalog(key);
-    let (mut client, _honest_server) = setup_dnssec_client_server(catalog, &public_key).await;
+    let (mut client, _honest_server) =
+        setup_dnssec_client_server(provider, catalog, &public_key).await;
 
     let query_name = Name::parse("a.z.w.example.", None).unwrap();
     let query_type = RecordType::AAAA;
@@ -207,9 +216,11 @@ async fn wildcard_no_data_error() {
 async fn ds_child_zone_no_data_error() {
     subscribe();
 
+    let provider = TokioRuntimeProvider::new();
     let (key, public_key) = generate_key();
     let catalog = example_zone_catalog(key);
-    let (mut client, _honest_server) = setup_dnssec_client_server(catalog, &public_key).await;
+    let (mut client, _honest_server) =
+        setup_dnssec_client_server(provider, catalog, &public_key).await;
 
     let query_name = Name::parse("example.", None).unwrap();
     let query_type = RecordType::DS;
@@ -248,6 +259,8 @@ async fn test_exclude_nsec(
     dnskey_response: &DnsResponse,
     nsec_owner_name: Name,
 ) {
+    let provider = TokioRuntimeProvider::new();
+
     let mut modified_response = original_response.clone();
     modified_response.authorities_mut().retain(|record| {
         record.name() != &nsec_owner_name || record.record_type() != RecordType::NSEC
@@ -273,7 +286,7 @@ async fn test_exclude_nsec(
         modified_response,
         dnskey_response.clone(),
     );
-    let (mut client, _mock_server) = setup_dnssec_client_server(mock, public_key).await;
+    let (mut client, _mock_server) = setup_dnssec_client_server(provider, mock, public_key).await;
 
     let error = client
         .query(query_name.clone(), DNSClass::IN, query_type)

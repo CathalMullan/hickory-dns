@@ -18,6 +18,7 @@ use std::{
 use crate::proto::rustls::tls_from_stream;
 use bytes::Bytes;
 use futures_util::StreamExt;
+use hickory_proto::runtime::RuntimeProvider;
 use ipnet::IpNet;
 #[cfg(feature = "__tls")]
 use rustls::{ServerConfig, server::ResolvesServerCert};
@@ -42,7 +43,7 @@ use crate::{
         op::{Header, LowerQuery, MessageType, ResponseCode, SerialMessage},
         rr::Record,
         runtime::TokioTime,
-        runtime::{TokioRuntimeProvider, iocompat::TokioIoAdapter},
+        runtime::iocompat::TokioIoAdapter,
         serialize::binary::{BinDecodable, BinDecoder},
         tcp::TcpStream,
         udp::UdpStream,
@@ -70,24 +71,33 @@ pub use timeout_stream::TimeoutStream;
 
 // TODO, would be nice to have a Slab for buffers here...
 /// A Futures based implementation of a DNS server
-pub struct Server<T: RequestHandler> {
+pub struct Server<P: RuntimeProvider, T: RequestHandler> {
+    // FIXME: Remove once the provider is used everywhere.
+    #[allow(dead_code)]
+    provider: P,
     context: Arc<ServerContext<T>>,
     join_set: JoinSet<Result<(), ProtoError>>,
 }
 
-impl<T: RequestHandler> Server<T> {
-    /// Creates a new ServerFuture with the specified Handler.
-    pub fn new(handler: T) -> Self {
-        Self::with_access(handler, &[], &[])
+impl<P: RuntimeProvider, T: RequestHandler> Server<P, T> {
+    /// Creates a new ServerFuture with the specified Provider and Handler.
+    pub fn new(provider: P, handler: T) -> Self {
+        Self::with_access(provider, handler, &[], &[])
     }
 
     /// Creates a new ServerFuture with the specified Handler and denied/allowed networks
-    pub fn with_access(handler: T, denied_networks: &[IpNet], allowed_networks: &[IpNet]) -> Self {
+    pub fn with_access(
+        provider: P,
+        handler: T,
+        denied_networks: &[IpNet],
+        allowed_networks: &[IpNet],
+    ) -> Self {
         let mut access = AccessControl::default();
         access.insert_deny(denied_networks);
         access.insert_allow(allowed_networks);
 
         Self {
+            provider,
             context: Arc::new(ServerContext {
                 handler,
                 access,
@@ -98,9 +108,9 @@ impl<T: RequestHandler> Server<T> {
     }
 
     /// Register a UDP socket. Should be bound before calling this function.
-    pub fn register_socket(&mut self, socket: net::UdpSocket) {
+    pub fn register_socket(&mut self, socket: P::Udp) {
         self.join_set
-            .spawn(handle_udp(socket, self.context.clone()));
+            .spawn(handle_udp::<P>(socket, self.context.clone()));
     }
 
     /// Register a TcpListener to the Server. This should already be bound to either an IPv6 or an
@@ -273,20 +283,21 @@ impl<T: RequestHandler> Server<T> {
     #[cfg(feature = "__quic")]
     pub fn register_quic_listener(
         &mut self,
-        socket: net::UdpSocket,
+        local_addr: SocketAddr,
         // TODO: need to set a timeout between requests.
         _timeout: Duration,
         server_cert_resolver: Arc<dyn ResolvesServerCert>,
         dns_hostname: Option<String>,
-    ) -> io::Result<()> {
+    ) -> io::Result<SocketAddr> {
+        let quic_server =
+            QuicServer::with_socket(self.provider.clone(), local_addr, server_cert_resolver)?;
+        let local_addr = quic_server.local_addr()?;
+
         let cx = self.context.clone();
-        self.join_set.spawn(quic_handler::handle_quic(
-            socket,
-            server_cert_resolver,
-            dns_hostname,
-            cx,
-        ));
-        Ok(())
+        self.join_set
+            .spawn(quic_handler::handle_quic(quic_server, dns_hostname, cx));
+
+        Ok(local_addr)
     }
 
     /// Register a UdpSocket for supporting DoQ (DNS-over-QUIC) with the provided TLS config.
@@ -310,20 +321,21 @@ impl<T: RequestHandler> Server<T> {
     #[cfg(feature = "__quic")]
     pub fn register_quic_listener_and_tls_config(
         &mut self,
-        socket: net::UdpSocket,
+        local_addr: SocketAddr,
         // TODO: need to set a timeout between requests.
         _timeout: Duration,
         tls_config: Arc<ServerConfig>,
         dns_hostname: Option<String>,
-    ) -> io::Result<()> {
-        let cx = self.context.clone();
+    ) -> io::Result<SocketAddr> {
+        let quic_server =
+            QuicServer::with_socket_and_tls_config(self.provider.clone(), local_addr, tls_config)?;
+        let local_addr = quic_server.local_addr()?;
 
-        self.join_set.spawn(quic_handler::handle_quic_with_server(
-            QuicServer::with_socket_and_tls_config(socket, tls_config)?,
-            dns_hostname,
-            cx,
-        ));
-        Ok(())
+        let cx = self.context.clone();
+        self.join_set
+            .spawn(quic_handler::handle_quic(quic_server, dns_hostname, cx));
+
+        Ok(local_addr)
     }
 
     /// Register a UdpSocket to the Server for supporting DoH3 (DNS-over-HTTP/3). The UdpSocket should already be bound to either an
@@ -429,16 +441,16 @@ impl<T: RequestHandler> Server<T> {
     }
 }
 
-async fn handle_udp(
-    socket: net::UdpSocket,
+async fn handle_udp<P: RuntimeProvider>(
+    socket: P::Udp,
     cx: Arc<ServerContext<impl RequestHandler>>,
 ) -> Result<(), ProtoError> {
-    debug!("registering udp: {:?}", socket);
+    debug!("registering udp");
 
     // create the new UdpStream, the IP address isn't relevant, and ideally goes essentially no where.
     //   the address used is acquired from the inbound queries
     let (mut stream, stream_handle) =
-        UdpStream::<TokioRuntimeProvider>::with_bound(socket, ([127, 255, 255, 254], 0).into());
+        UdpStream::<P>::with_bound(socket, ([127, 255, 255, 254], 0).into());
 
     let mut inner_join_set = JoinSet::new();
     loop {
@@ -1009,6 +1021,7 @@ mod tests {
     use super::*;
     use crate::zone_handler::Catalog;
     use futures_util::future;
+    use hickory_proto::runtime::TokioRuntimeProvider;
     #[cfg(feature = "__tls")]
     use rustls::{
         pki_types::{CertificateDer, PrivateKeyDer},
@@ -1027,7 +1040,7 @@ mod tests {
 
         let endpoints2 = endpoints.clone();
         let (abortable, abort_handle) = future::abortable(async move {
-            let mut server_future = Server::new(Catalog::new());
+            let mut server_future = Server::new(TokioRuntimeProvider::new(), Catalog::new());
             endpoints2.register(&mut server_future).await;
             server_future.block_until_done().await
         });
@@ -1041,7 +1054,7 @@ mod tests {
     #[tokio::test]
     async fn graceful_shutdown() {
         subscribe();
-        let mut server_future = Server::new(Catalog::new());
+        let mut server_future = Server::new(TokioRuntimeProvider::new(), Catalog::new());
         let endpoints = Endpoints::new().await;
         endpoints.register(&mut server_future).await;
 
@@ -1118,8 +1131,14 @@ mod tests {
             }
         }
 
-        async fn register<T: RequestHandler>(&self, server: &mut Server<T>) {
-            server.register_socket(UdpSocket::bind(self.udp_addr).await.unwrap());
+        async fn register<P: RuntimeProvider, T: RequestHandler>(&self, server: &mut Server<P, T>) {
+            let udp_socket = server
+                .provider
+                .bind_udp(self.udp_addr, self.udp_addr)
+                .await
+                .unwrap();
+
+            server.register_socket(udp_socket);
             server.register_listener(
                 TcpListener::bind(self.tcp_addr).await.unwrap(),
                 Duration::from_secs(1),
@@ -1155,12 +1174,7 @@ mod tests {
             {
                 let cert_key = rustls_cert_key();
                 server
-                    .register_quic_listener(
-                        UdpSocket::bind(self.quic_addr).await.unwrap(),
-                        Duration::from_secs(1),
-                        cert_key,
-                        None,
-                    )
+                    .register_quic_listener(self.quic_addr, Duration::from_secs(1), cert_key, None)
                     .unwrap();
             }
 
