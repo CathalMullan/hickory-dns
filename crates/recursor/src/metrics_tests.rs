@@ -231,10 +231,18 @@ impl RuntimeProvider for MockProvider {
     type Timer = TokioTime;
     type Udp = MockUdpSocket;
     type Tcp = MockTcpStream;
+    type TcpListener = MockTcpListener;
     type Tls = MockTcpStream;
 
     fn create_handle(&self) -> Self::Handle {
         self.tokio_handle.clone()
+    }
+
+    fn bind_tcp(
+        &self,
+        _addr: SocketAddr,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::TcpListener>> + Send>> {
+        Box::pin(ready(Ok(MockTcpListener::new(self.handler.clone()))))
     }
 
     fn connect_tcp(
@@ -249,12 +257,27 @@ impl RuntimeProvider for MockProvider {
         ))))
     }
 
+    fn accept_tcp<'a>(
+        &'a self,
+        listener: &'a mut Self::TcpListener,
+    ) -> Pin<Box<dyn Future<Output = io::Result<(Self::Tcp, SocketAddr)>> + Send + 'a>> {
+        Box::pin(ready(listener.accept()))
+    }
+
     fn connect_tls(
         &self,
         stream: Self::Tcp,
         _server_name: ServerName<'static>,
         _client_config: Arc<ClientConfig>,
     ) -> Pin<Box<dyn Future<Output = io::Result<Self::Tls>> + Send>> {
+        Box::pin(ready(Ok(stream)))
+    }
+
+    fn accept_tls<'a>(
+        &'a self,
+        stream: Self::Tcp,
+        _server_config: Arc<rustls::ServerConfig>,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::Tls>> + Send + 'a>> {
         Box::pin(ready(Ok(stream)))
     }
 
@@ -274,6 +297,21 @@ impl RuntimeProvider for MockProvider {
             socket.local_addr()?,
             self.handler.clone(),
         ))
+    }
+}
+
+struct MockTcpListener {
+    handler: Arc<dyn MockHandler + Send + Sync + 'static>,
+}
+
+impl MockTcpListener {
+    fn new(handler: Arc<dyn MockHandler + Send + Sync + 'static>) -> Self {
+        Self { handler }
+    }
+
+    fn accept(&mut self) -> io::Result<(MockTcpStream, SocketAddr)> {
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0);
+        Ok((MockTcpStream::new(self.handler.clone(), addr.ip()), addr))
     }
 }
 

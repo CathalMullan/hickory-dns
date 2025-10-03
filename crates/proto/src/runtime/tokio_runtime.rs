@@ -1,11 +1,11 @@
 use alloc::sync::Arc;
 use std::sync::Mutex;
 #[cfg(feature = "__tls")]
-use tokio_rustls::client::TlsStream;
+use tokio_rustls::TlsStream;
 
 #[cfg(feature = "__quic")]
 use quinn::Runtime as QuinnRuntime;
-use tokio::net::{TcpSocket, TcpStream, UdpSocket as TokioUdpSocket};
+use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
 use tokio::runtime::Runtime;
 use tokio::task::JoinSet;
 use tokio::time::timeout;
@@ -65,13 +65,21 @@ impl TokioRuntimeProvider {
 impl RuntimeProvider for TokioRuntimeProvider {
     type Handle = TokioHandle;
     type Timer = TokioTime;
-    type Udp = TokioUdpSocket;
+    type Udp = UdpSocket;
     type Tcp = TokioIoAdapter<TcpStream>;
+    type TcpListener = TcpListener;
     #[cfg(feature = "__tls")]
     type Tls = TokioIoAdapter<TlsStream<DnsStreamAdapter<Self::Tcp>>>;
 
     fn create_handle(&self) -> Self::Handle {
         self.0.clone()
+    }
+
+    fn bind_tcp(
+        &self,
+        addr: SocketAddr,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::TcpListener>> + Send>> {
+        Box::pin(TcpListener::bind(addr))
     }
 
     fn connect_tcp(
@@ -101,6 +109,18 @@ impl RuntimeProvider for TokioRuntimeProvider {
                     format!("connection to {server_addr:?} timed out after {wait_for:?}"),
                 )),
             }
+        })
+    }
+
+    fn accept_tcp<'a>(
+        &'a self,
+        listener: &'a mut Self::TcpListener,
+    ) -> Pin<Box<dyn Future<Output = io::Result<(Self::Tcp, SocketAddr)>> + Send + 'a>> {
+        Box::pin(async move {
+            listener
+                .accept()
+                .await
+                .map(|(stream, addr)| (TokioIoAdapter(stream), addr))
         })
     }
 
@@ -138,7 +158,27 @@ impl RuntimeProvider for TokioRuntimeProvider {
                 }
             };
 
-            Ok(TokioIoAdapter(s))
+            Ok(TokioIoAdapter(TlsStream::Client(s)))
+        })
+    }
+
+    #[cfg(feature = "__tls")]
+    fn accept_tls<'a>(
+        &'a self,
+        stream: Self::Tcp,
+        server_config: Arc<rustls::ServerConfig>,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::Tls>> + Send + 'a>> {
+        let tls_acceptor = tokio_rustls::TlsAcceptor::from(server_config);
+
+        Box::pin(async move {
+            let s = tls_acceptor
+                .accept(DnsStreamAdapter(stream))
+                .await
+                .map_err(|e| {
+                    io::Error::new(io::ErrorKind::ConnectionRefused, format!("tls error: {e}"))
+                })?;
+
+            Ok(TokioIoAdapter(TlsStream::Server(s)))
         })
     }
 
@@ -147,12 +187,12 @@ impl RuntimeProvider for TokioRuntimeProvider {
         local_addr: SocketAddr,
         _server_addr: SocketAddr,
     ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Udp>>>> {
-        Box::pin(tokio::net::UdpSocket::bind(local_addr))
+        Box::pin(UdpSocket::bind(local_addr))
     }
 
     fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Self::Udp> {
         socket.set_nonblocking(true)?;
-        TokioUdpSocket::from_std(socket)
+        UdpSocket::from_std(socket)
     }
 
     #[cfg(feature = "__quic")]

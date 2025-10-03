@@ -44,6 +44,9 @@ pub trait RuntimeProvider: Clone + Send + Sync + Unpin + 'static {
     /// TcpStream
     type Tcp: DnsTcpStream;
 
+    /// TcpListener
+    type TcpListener: Send + Unpin;
+
     /// TlsStream
     #[cfg(feature = "__tls")]
     type Tls: DnsTcpStream;
@@ -51,7 +54,13 @@ pub trait RuntimeProvider: Clone + Send + Sync + Unpin + 'static {
     /// Create a runtime handle
     fn create_handle(&self) -> Self::Handle;
 
-    /// Create a TCP connection with custom configuration.
+    /// Bind a TCP listener.
+    fn bind_tcp(
+        &self,
+        addr: SocketAddr,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::TcpListener>> + Send>>;
+
+    /// Create a TCP connection.
     fn connect_tcp(
         &self,
         server_addr: SocketAddr,
@@ -59,7 +68,14 @@ pub trait RuntimeProvider: Clone + Send + Sync + Unpin + 'static {
         timeout: Option<Duration>,
     ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Tcp>>>>;
 
-    /// Create a TLS connection with custom configuration.
+    /// Accept a TCP connection.
+    #[allow(clippy::type_complexity)]
+    fn accept_tcp<'a>(
+        &'a self,
+        listener: &'a mut Self::TcpListener,
+    ) -> Pin<Box<dyn Future<Output = io::Result<(Self::Tcp, SocketAddr)>> + Send + 'a>>;
+
+    /// Create a TLS connection.
     #[cfg(feature = "__tls")]
     #[allow(clippy::type_complexity)]
     fn connect_tls(
@@ -68,6 +84,14 @@ pub trait RuntimeProvider: Clone + Send + Sync + Unpin + 'static {
         server_name: rustls_pki_types::ServerName<'static>,
         client_config: alloc::sync::Arc<rustls::ClientConfig>,
     ) -> Pin<Box<dyn Future<Output = io::Result<Self::Tls>> + Send>>;
+
+    /// Accept a TLS connection.
+    #[cfg(feature = "__tls")]
+    fn accept_tls<'a>(
+        &'a self,
+        stream: Self::Tcp,
+        server_config: alloc::sync::Arc<rustls::ServerConfig>,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::Tls>> + Send + 'a>>;
 
     /// Create a UDP socket bound to `local_addr`. The returned value should **not** be connected to `server_addr`.
     /// *Notice: the future should be ready once returned at best effort. Otherwise UDP DNS may need much more retries.*

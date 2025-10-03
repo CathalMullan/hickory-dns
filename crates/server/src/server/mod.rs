@@ -208,7 +208,7 @@ impl<P: RuntimeProvider, T: RequestHandler> Server<P, T> {
     #[cfg(feature = "__https")]
     pub fn register_https_listener(
         &mut self,
-        listener: net::TcpListener,
+        listener: P::TcpListener,
         // TODO: need to set a timeout between requests.
         handshake_timeout: Duration,
         server_cert_resolver: Arc<dyn ResolvesServerCert>,
@@ -216,6 +216,7 @@ impl<P: RuntimeProvider, T: RequestHandler> Server<P, T> {
         http_endpoint: String,
     ) -> io::Result<()> {
         self.join_set.spawn(h2_handler::handle_h2(
+            self.provider.clone(),
             listener,
             handshake_timeout,
             server_cert_resolver,
@@ -248,17 +249,18 @@ impl<P: RuntimeProvider, T: RequestHandler> Server<P, T> {
     #[cfg(feature = "__https")]
     pub fn register_https_listener_with_tls_config(
         &mut self,
-        listener: net::TcpListener,
+        listener: P::TcpListener,
         // TODO: need to set a timeout between requests.
         handshake_timeout: Duration,
         tls_config: Arc<ServerConfig>,
         dns_hostname: Option<String>,
         http_endpoint: String,
     ) -> io::Result<()> {
-        self.join_set.spawn(h2_handler::handle_h2_with_acceptor(
+        self.join_set.spawn(h2_handler::handle_h2_with_tls_config(
+            self.provider.clone(),
             listener,
             handshake_timeout,
-            TlsAcceptor::from(tls_config),
+            tls_config,
             dns_hostname,
             http_endpoint,
             self.context.clone(),
@@ -1164,9 +1166,15 @@ mod tests {
             #[cfg(feature = "__https")]
             {
                 let cert_key = rustls_cert_key();
+                let https_listener = server
+                    .provider
+                    .bind_tcp(self.https_rustls_addr)
+                    .await
+                    .unwrap();
+
                 server
                     .register_https_listener(
-                        TcpListener::bind(self.https_rustls_addr).await.unwrap(),
+                        https_listener,
                         Duration::from_secs(1),
                         cert_key,
                         None,

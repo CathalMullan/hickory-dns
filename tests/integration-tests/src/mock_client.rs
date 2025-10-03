@@ -81,6 +81,8 @@ impl DnsUdpSocket for UdpPlaceholder {
     }
 }
 
+pub struct TcpListenerPlaceholder;
+
 #[derive(Clone, Default)]
 pub struct MockRuntimeProvider;
 
@@ -89,11 +91,19 @@ impl RuntimeProvider for MockRuntimeProvider {
     type Timer = TokioTime;
     type Udp = UdpPlaceholder;
     type Tcp = TcpPlaceholder;
+    type TcpListener = TcpListenerPlaceholder;
     #[cfg(feature = "__tls")]
     type Tls = TcpPlaceholder;
 
     fn create_handle(&self) -> Self::Handle {
         TokioHandle::default()
+    }
+
+    fn bind_tcp(
+        &self,
+        _addr: SocketAddr,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::TcpListener>> + Send>> {
+        Box::pin(async { Ok(TcpListenerPlaceholder) })
     }
 
     fn connect_tcp(
@@ -105,6 +115,18 @@ impl RuntimeProvider for MockRuntimeProvider {
         Box::pin(async { Ok(TcpPlaceholder) })
     }
 
+    fn accept_tcp<'a>(
+        &'a self,
+        _listener: &'a mut Self::TcpListener,
+    ) -> Pin<Box<dyn Future<Output = io::Result<(Self::Tcp, SocketAddr)>> + Send + 'a>> {
+        Box::pin(async {
+            Ok((
+                TcpPlaceholder,
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0),
+            ))
+        })
+    }
+
     #[cfg(feature = "__tls")]
     fn connect_tls(
         &self,
@@ -112,6 +134,15 @@ impl RuntimeProvider for MockRuntimeProvider {
         _server_name: rustls::pki_types::ServerName<'static>,
         _client_config: Arc<rustls::ClientConfig>,
     ) -> Pin<Box<dyn Future<Output = std::io::Result<Self::Tls>> + Send>> {
+        Box::pin(async move { Ok(stream) })
+    }
+
+    #[cfg(feature = "__tls")]
+    fn accept_tls<'a>(
+        &'a self,
+        stream: Self::Tcp,
+        _server_config: Arc<rustls::ServerConfig>,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::Tls>> + Send + 'a>> {
         Box::pin(async move { Ok(stream) })
     }
 

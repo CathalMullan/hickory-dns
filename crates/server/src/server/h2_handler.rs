@@ -10,14 +10,9 @@ use std::{io, net::SocketAddr, sync::Arc, time::Duration};
 use bytes::Bytes;
 use futures_util::lock::Mutex;
 use h2::server;
+use hickory_proto::runtime::{RuntimeProvider, Spawn};
 use rustls::server::ResolvesServerCert;
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    net::TcpListener,
-    task::JoinSet,
-    time::timeout,
-};
-use tokio_rustls::TlsAcceptor;
+use tokio::{task::JoinSet, time::timeout};
 use tracing::{debug, error, warn};
 
 use super::{
@@ -28,13 +23,17 @@ use super::{
     sanitize_src_address,
 };
 use crate::{
-    proto::{ProtoError, h2::h2_server, http::Version, rr::Record, xfer::Protocol},
+    proto::{
+        ProtoError, h2::h2_server, http::Version, rr::Record, runtime::iocompat::DnsStreamAdapter,
+        xfer::Protocol,
+    },
     zone_handler::MessageResponse,
 };
 
 /// handle h2 using the default TLS server config.
-pub(super) async fn handle_h2(
-    listener: TcpListener,
+pub(super) async fn handle_h2<P: RuntimeProvider>(
+    provider: P,
+    listener: P::TcpListener,
     // TODO: need to set a timeout between requests.
     handshake_timeout: Duration,
     server_cert_resolver: Arc<dyn ResolvesServerCert>,
@@ -42,13 +41,11 @@ pub(super) async fn handle_h2(
     http_endpoint: String,
     cx: Arc<ServerContext<impl RequestHandler>>,
 ) -> Result<(), ProtoError> {
-    handle_h2_with_acceptor(
+    handle_h2_with_tls_config(
+        provider,
         listener,
         handshake_timeout,
-        TlsAcceptor::from(Arc::new(default_tls_server_config(
-            b"h2",
-            server_cert_resolver,
-        )?)),
+        Arc::new(default_tls_server_config(b"h2", server_cert_resolver)?),
         dns_hostname,
         http_endpoint,
         cx,
@@ -56,25 +53,26 @@ pub(super) async fn handle_h2(
     .await
 }
 
-/// handle h2 using a specific TlsAcceptor.
-pub(super) async fn handle_h2_with_acceptor(
-    listener: TcpListener,
+/// handle h2 using a specific TLS config.
+pub(super) async fn handle_h2_with_tls_config<P: RuntimeProvider>(
+    provider: P,
+    mut listener: P::TcpListener,
     // TODO: need to set a timeout between requests.
     handshake_timeout: Duration,
-    tls_acceptor: TlsAcceptor,
+    tls_config: Arc<rustls::ServerConfig>,
     dns_hostname: Option<String>,
     http_endpoint: String,
     cx: Arc<ServerContext<impl RequestHandler>>,
 ) -> Result<(), ProtoError> {
     let dns_hostname: Option<Arc<str>> = dns_hostname.map(|n| n.into());
     let http_endpoint: Arc<str> = Arc::from(http_endpoint);
-    debug!("registered https: {listener:?}");
+    debug!("registered https");
 
     let mut inner_join_set = JoinSet::new();
     loop {
         let shutdown = cx.shutdown.clone();
         let (tcp_stream, src_addr) = tokio::select! {
-            tcp_stream = listener.accept() => match tcp_stream {
+            tcp_stream = provider.accept_tcp(&mut listener) => match tcp_stream {
                 Ok((t, s)) => (t, s),
                 Err(error) => {
                     debug!(%error, "error receiving HTTPS tcp_stream error");
@@ -97,7 +95,8 @@ pub(super) async fn handle_h2_with_acceptor(
         }
 
         let cx = cx.clone();
-        let tls_acceptor = tls_acceptor.clone();
+        let provider_clone = provider.clone();
+        let tls_config = tls_config.clone();
         let dns_hostname = dns_hostname.clone();
         let http_endpoint = http_endpoint.clone();
         inner_join_set.spawn(async move {
@@ -105,7 +104,11 @@ pub(super) async fn handle_h2_with_acceptor(
 
             // TODO: need to consider timeout of total connect...
             // take the created stream...
-            let Ok(tls_stream) = timeout(handshake_timeout, tls_acceptor.accept(tcp_stream)).await
+            let Ok(tls_stream) = timeout(
+                handshake_timeout,
+                provider_clone.accept_tls(tcp_stream, tls_config),
+            )
+            .await
             else {
                 warn!("https timeout expired during handshake");
                 return;
@@ -120,7 +123,15 @@ pub(super) async fn handle_h2_with_acceptor(
             };
             debug!("accepted HTTPS request from: {src_addr}");
 
-            h2_handler(tls_stream, src_addr, dns_hostname, http_endpoint, cx).await;
+            h2_handler(
+                provider_clone,
+                tls_stream,
+                src_addr,
+                dns_hostname,
+                http_endpoint,
+                cx,
+            )
+            .await;
         });
 
         reap_tasks(&mut inner_join_set);
@@ -133,8 +144,9 @@ pub(super) async fn handle_h2_with_acceptor(
     }
 }
 
-pub(crate) async fn h2_handler(
-    io: impl AsyncRead + AsyncWrite + Unpin,
+pub(crate) async fn h2_handler<P: RuntimeProvider>(
+    provider: P,
+    io: P::Tls,
     src_addr: SocketAddr,
     dns_hostname: Option<Arc<str>>,
     http_endpoint: Arc<str>,
@@ -142,6 +154,8 @@ pub(crate) async fn h2_handler(
 ) {
     let dns_hostname = dns_hostname.clone();
     let http_endpoint = http_endpoint.clone();
+
+    let io = DnsStreamAdapter(io);
 
     // Start the HTTP/2.0 connection handshake
     let mut h2 = match server::handshake(io).await {
@@ -177,7 +191,9 @@ pub(crate) async fn h2_handler(
         let dns_hostname = dns_hostname.clone();
         let http_endpoint = http_endpoint.clone();
         let responder = HttpsResponseHandle(Arc::new(Mutex::new(respond)));
-        tokio::spawn(async move {
+
+        let mut handle = provider.create_handle();
+        handle.spawn_detached(async move {
             let body = match h2_server::message_from(dns_hostname, http_endpoint, request).await {
                 Ok(bytes) => bytes,
                 Err(err) => {
