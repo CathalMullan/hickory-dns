@@ -22,11 +22,9 @@ use hickory_proto::runtime::RuntimeProvider;
 use ipnet::IpNet;
 #[cfg(feature = "__tls")]
 use rustls::{ServerConfig, server::ResolvesServerCert};
+use tokio::task::JoinSet;
 #[cfg(feature = "__tls")]
 use tokio::time::timeout;
-use tokio::{net, task::JoinSet};
-#[cfg(feature = "__tls")]
-use tokio_rustls::TlsAcceptor;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
@@ -43,7 +41,6 @@ use crate::{
         op::{Header, LowerQuery, MessageType, ResponseCode, SerialMessage},
         rr::Record,
         runtime::TokioTime,
-        runtime::iocompat::TokioIoAdapter,
         serialize::binary::{BinDecodable, BinDecoder},
         tcp::TcpStream,
         udp::UdpStream,
@@ -72,8 +69,6 @@ pub use timeout_stream::TimeoutStream;
 // TODO, would be nice to have a Slab for buffers here...
 /// A Futures based implementation of a DNS server
 pub struct Server<P: RuntimeProvider, T: RequestHandler> {
-    // FIXME: Remove once the provider is used everywhere.
-    #[allow(dead_code)]
     provider: P,
     context: Arc<ServerContext<T>>,
     join_set: JoinSet<Result<(), ProtoError>>,
@@ -125,9 +120,13 @@ impl<P: RuntimeProvider, T: RequestHandler> Server<P, T> {
     ///   requests within this time period will be closed. In the future it should be
     ///   possible to create long-lived queries, but these should be from trusted sources
     ///   only, this would require some type of whitelisting.
-    pub fn register_listener(&mut self, listener: net::TcpListener, timeout: Duration) {
-        self.join_set
-            .spawn(handle_tcp(listener, timeout, self.context.clone()));
+    pub fn register_listener(&mut self, listener: P::TcpListener, timeout: Duration) {
+        self.join_set.spawn(handle_tcp(
+            self.provider.clone(),
+            listener,
+            timeout,
+            self.context.clone(),
+        ));
     }
 
     /// Register a TlsListener to the Server. The TlsListener should already be bound to either an
@@ -149,11 +148,12 @@ impl<P: RuntimeProvider, T: RequestHandler> Server<P, T> {
     #[cfg(feature = "__tls")]
     pub fn register_tls_listener_with_tls_config(
         &mut self,
-        listener: net::TcpListener,
+        listener: P::TcpListener,
         handshake_timeout: Duration,
         tls_config: Arc<ServerConfig>,
     ) -> io::Result<()> {
         self.join_set.spawn(handle_tls(
+            self.provider.clone(),
             listener,
             tls_config,
             handshake_timeout,
@@ -178,7 +178,7 @@ impl<P: RuntimeProvider, T: RequestHandler> Server<P, T> {
     #[cfg(feature = "__tls")]
     pub fn register_tls_listener(
         &mut self,
-        listener: net::TcpListener,
+        listener: P::TcpListener,
         timeout: Duration,
         server_cert_resolver: Arc<dyn ResolvesServerCert>,
     ) -> io::Result<()> {
@@ -511,16 +511,17 @@ async fn handle_udp<P: RuntimeProvider>(
     }
 }
 
-async fn handle_tcp(
-    listener: net::TcpListener,
+async fn handle_tcp<P: RuntimeProvider>(
+    provider: P,
+    mut listener: P::TcpListener,
     timeout: Duration,
     cx: Arc<ServerContext<impl RequestHandler>>,
 ) -> Result<(), ProtoError> {
-    debug!("register tcp: {listener:?}");
+    debug!("register tcp");
     let mut inner_join_set = JoinSet::new();
     loop {
         let (tcp_stream, src_addr) = tokio::select! {
-            tcp_stream = listener.accept() => match tcp_stream {
+            tcp_stream = provider.accept_tcp(&mut listener) => match tcp_stream {
                 Ok((t, s)) => (t, s),
                 Err(error) => {
                     debug!(%error, "error receiving TCP tcp_stream error");
@@ -550,8 +551,7 @@ async fn handle_tcp(
         inner_join_set.spawn(async move {
             debug!(%src_addr, "accepted TCP request");
             // take the created stream...
-            let (buf_stream, stream_handle) =
-                TcpStream::from_stream(TokioIoAdapter(tcp_stream), src_addr);
+            let (buf_stream, stream_handle) = TcpStream::from_stream(tcp_stream, src_addr);
             let mut timeout_stream = TimeoutStream::new(buf_stream, timeout);
 
             while let Some(message) = timeout_stream.next().await {
@@ -581,19 +581,19 @@ async fn handle_tcp(
 }
 
 #[cfg(feature = "__tls")]
-async fn handle_tls(
-    listener: net::TcpListener,
+async fn handle_tls<P: RuntimeProvider>(
+    provider: P,
+    mut listener: P::TcpListener,
     tls_config: Arc<ServerConfig>,
     handshake_timeout: Duration,
     cx: Arc<ServerContext<impl RequestHandler>>,
 ) -> Result<(), ProtoError> {
-    debug!(?listener, "registered tls");
-    let tls_acceptor = TlsAcceptor::from(tls_config);
+    debug!("registered tls");
 
     let mut inner_join_set = JoinSet::new();
     loop {
         let (tcp_stream, src_addr) = tokio::select! {
-            tcp_stream = listener.accept() => match tcp_stream {
+            tcp_stream = provider.accept_tcp(&mut listener) => match tcp_stream {
                 Ok((t, s)) => (t, s),
                 Err(error) => {
                     debug!(%error, "error receiving TLS tcp_stream error");
@@ -619,20 +619,25 @@ async fn handle_tls(
         }
 
         let cx = cx.clone();
-        let tls_acceptor = tls_acceptor.clone();
+        let provider_clone = provider.clone();
+        let tls_config = tls_config.clone();
         // kick out to a different task immediately, let them do the TLS handshake
         inner_join_set.spawn(async move {
             debug!(%src_addr, "starting TLS request");
 
             // perform the TLS
-            let Ok(tls_stream) = timeout(handshake_timeout, tls_acceptor.accept(tcp_stream)).await
+            let Ok(tls_stream) = timeout(
+                handshake_timeout,
+                provider_clone.accept_tls(tcp_stream, tls_config),
+            )
+            .await
             else {
                 warn!("tls timeout expired during handshake");
                 return;
             };
 
             let tls_stream = match tls_stream {
-                Ok(tls_stream) => TokioIoAdapter(tls_stream),
+                Ok(tls_stream) => tls_stream,
                 Err(error) => {
                     debug!(%src_addr, %error, "tls handshake error");
                     return;
@@ -1144,22 +1149,18 @@ mod tests {
                 .bind_udp(self.udp_addr, self.udp_addr)
                 .await
                 .unwrap();
-
             server.register_socket(udp_socket);
-            server.register_listener(
-                TcpListener::bind(self.tcp_addr).await.unwrap(),
-                Duration::from_secs(1),
-            );
+
+            let tcp_listener = server.provider.bind_tcp(self.tcp_addr).await.unwrap();
+            server.register_listener(tcp_listener, Duration::from_secs(1));
 
             #[cfg(feature = "__tls")]
             {
                 let cert_key = rustls_cert_key();
+                let tls_listener = server.provider.bind_tcp(self.rustls_addr).await.unwrap();
+
                 server
-                    .register_tls_listener(
-                        TcpListener::bind(self.rustls_addr).await.unwrap(),
-                        Duration::from_secs(30),
-                        cert_key,
-                    )
+                    .register_tls_listener(tls_listener, Duration::from_secs(30), cert_key)
                     .unwrap();
             }
 
