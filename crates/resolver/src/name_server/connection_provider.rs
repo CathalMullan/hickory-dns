@@ -196,7 +196,7 @@ impl<P: RuntimeProvider> ConnectionProvider for P {
                 });
 
                 Connecting::Quic(DnsExchange::connect(
-                    QuicClientStream::builder()
+                    QuicClientStream::builder(self.clone())
                         .crypto_config(cx.tls.config.clone())
                         .build_with_future(
                             binder.bind_quic(bind_addr, remote_addr)?,
