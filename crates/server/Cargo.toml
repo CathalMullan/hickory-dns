@@ -35,6 +35,27 @@ blocklist = ["resolver"]
 toml = ["dep:toml"]
 metrics = ["hickory-recursor?/metrics", "dep:metrics"]
 
+tokio-tls = [
+    "hickory-proto/tokio-tls",
+    "hickory-recursor?/tokio-tls",
+    "hickory-resolver?/tokio-tls",
+]
+tokio-https = [
+    "hickory-proto/tokio-https",
+    "hickory-recursor?/tokio-https",
+    "hickory-resolver?/tokio-https",
+]
+tokio-quic = [
+    "hickory-proto/tokio-quic",
+    "hickory-recursor?/tokio-quic",
+    "hickory-resolver?/tokio-quic",
+]
+tokio-h3 = [
+    "hickory-proto/tokio-h3",
+    "hickory-recursor?/tokio-h3",
+    "hickory-resolver?/tokio-h3",
+]
+
 tls-aws-lc-rs = [
     "hickory-proto/tls-aws-lc-rs",
     "hickory-recursor?/tls-aws-lc-rs",
@@ -156,3 +177,18 @@ workspace = true
 skip_optional_dependencies = true
 max_combination_size = 2
 denylist = ["__tls", "__https", "__quic", "__h3", "__dnssec"]
+skip_feature_sets = [
+    ["h3-aws-lc-rs"],
+    ["h3-ring"],
+    ["https-aws-lc-rs"],
+    ["https-ring"],
+    ["quic-aws-lc-rs"],
+    ["quic-ring"],
+    ["tls-aws-lc-rs"],
+    ["tls-ring"],
+
+    ["tokio-h3"],
+    ["tokio-https"],
+    ["tokio-quic"],
+    ["tokio-tls"],
+]

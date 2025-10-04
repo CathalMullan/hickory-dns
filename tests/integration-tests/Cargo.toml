@@ -35,6 +35,31 @@ name = "hickory_integration"
 path = "src/lib.rs"
 
 [features]
+tokio-tls = [
+    "hickory-proto/tokio-tls",
+    "hickory-resolver/tokio-tls",
+    "hickory-server/tokio-tls",
+    "hickory-client/tokio-tls",
+]
+tokio-https = [
+    "hickory-proto/tokio-https",
+    "hickory-resolver/tokio-https",
+    "hickory-server/tokio-https",
+    "hickory-client/tokio-https",
+]
+tokio-quic = [
+    "hickory-proto/tokio-quic",
+    "hickory-resolver/tokio-quic",
+    "hickory-server/tokio-quic",
+    "hickory-client/tokio-quic",
+]
+tokio-h3 = [
+    "hickory-proto/tokio-h3",
+    "hickory-resolver/tokio-h3",
+    "hickory-server/tokio-h3",
+    "hickory-client/tokio-h3",
+]
+
 dnssec-aws-lc-rs = [
     "hickory-resolver/dnssec-aws-lc-rs",
     "hickory-server/dnssec-aws-lc-rs",
@@ -134,3 +159,18 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "std"]
 skip_optional_dependencies = true
 max_combination_size = 2
 denylist = ["__tls", "__https", "__quic", "__h3", "__dnssec"]
+skip_feature_sets = [
+    ["h3-aws-lc-rs"],
+    ["h3-ring"],
+    ["https-aws-lc-rs"],
+    ["https-ring"],
+    ["quic-aws-lc-rs"],
+    ["quic-ring"],
+    ["tls-aws-lc-rs"],
+    ["tls-ring"],
+
+    ["tokio-h3"],
+    ["tokio-https"],
+    ["tokio-quic"],
+    ["tokio-tls"],
+]

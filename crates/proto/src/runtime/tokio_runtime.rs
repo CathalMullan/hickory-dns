@@ -1,16 +1,16 @@
 use alloc::sync::Arc;
 use std::sync::Mutex;
-#[cfg(feature = "__tls")]
+#[cfg(feature = "tokio-tls")]
 use tokio_rustls::TlsStream;
 
-#[cfg(feature = "__quic")]
+#[cfg(feature = "tokio-quic")]
 use quinn::Runtime as QuinnRuntime;
 use tokio::net::{TcpListener, TcpSocket, TcpStream, UdpSocket};
 use tokio::runtime::Runtime;
 use tokio::task::JoinSet;
 use tokio::time::timeout;
 
-#[cfg(feature = "__tls")]
+#[cfg(feature = "tokio-tls")]
 use super::iocompat::DnsStreamAdapter;
 use super::iocompat::TokioIoAdapter;
 use super::*;
@@ -68,7 +68,7 @@ impl RuntimeProvider for TokioRuntimeProvider {
     type Udp = UdpSocket;
     type Tcp = TokioIoAdapter<TcpStream>;
     type TcpListener = TcpListener;
-    #[cfg(feature = "__tls")]
+    #[cfg(feature = "tokio-tls")]
     type Tls = TokioIoAdapter<TlsStream<DnsStreamAdapter<Self::Tcp>>>;
 
     fn create_handle(&self) -> Self::Handle {
@@ -124,7 +124,7 @@ impl RuntimeProvider for TokioRuntimeProvider {
         })
     }
 
-    #[cfg(feature = "__tls")]
+    #[cfg(feature = "tokio-tls")]
     fn connect_tls(
         &self,
         stream: Self::Tcp,
@@ -162,7 +162,7 @@ impl RuntimeProvider for TokioRuntimeProvider {
         })
     }
 
-    #[cfg(feature = "__tls")]
+    #[cfg(feature = "tokio-tls")]
     fn accept_tls<'a>(
         &'a self,
         stream: Self::Tcp,
@@ -195,7 +195,7 @@ impl RuntimeProvider for TokioRuntimeProvider {
         UdpSocket::from_std(socket)
     }
 
-    #[cfg(feature = "__quic")]
+    #[cfg(feature = "tokio-quic")]
     fn quic_binder(&self) -> Option<&dyn QuicSocketBinder> {
         Some(&TokioQuicSocketBinder)
     }
@@ -206,10 +206,10 @@ fn reap_tasks(join_set: &mut JoinSet<Result<(), ProtoError>>) {
     while join_set.try_join_next().is_some() {}
 }
 
-#[cfg(feature = "__quic")]
+#[cfg(feature = "tokio-quic")]
 struct TokioQuicSocketBinder;
 
-#[cfg(feature = "__quic")]
+#[cfg(feature = "tokio-quic")]
 impl QuicSocketBinder for TokioQuicSocketBinder {
     fn bind_quic(
         &self,

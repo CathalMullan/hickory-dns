@@ -32,6 +32,11 @@ license.workspace = true
 [features]
 backtrace = ["hickory-proto/backtrace"]
 
+tokio-tls = ["hickory-proto/tokio-tls"]
+tokio-https = ["hickory-proto/tokio-https"]
+tokio-quic = ["hickory-proto/tokio-quic"]
+tokio-h3 = ["hickory-proto/tokio-h3"]
+
 tls-aws-lc-rs = ["hickory-proto/tls-aws-lc-rs"]
 https-aws-lc-rs = ["hickory-proto/https-aws-lc-rs"]
 quic-aws-lc-rs = ["hickory-proto/quic-aws-lc-rs"]
@@ -91,3 +96,18 @@ workspace = true
 skip_optional_dependencies = true
 max_combination_size = 2
 denylist = ["__tls", "__https", "__quic", "__h3", "__dnssec"]
+skip_feature_sets = [
+    ["h3-aws-lc-rs"],
+    ["h3-ring"],
+    ["https-aws-lc-rs"],
+    ["https-ring"],
+    ["quic-aws-lc-rs"],
+    ["quic-ring"],
+    ["tls-aws-lc-rs"],
+    ["tls-ring"],
+
+    ["tokio-h3"],
+    ["tokio-https"],
+    ["tokio-quic"],
+    ["tokio-tls"],
+]

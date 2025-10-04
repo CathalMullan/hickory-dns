@@ -25,6 +25,7 @@ categories.workspace = true
 license.workspace = true
 
 [features]
+default = ["std", "tokio"]
 std = [
     "data-encoding/std",
     "futures-channel/std",
@@ -40,20 +41,27 @@ std = [
     "dep:tokio",
 ]
 
-tls-aws-lc-rs = ["tokio-rustls/aws-lc-rs", "__tls"]
+tokio = ["std", "tokio/rt", "tokio/rt-multi-thread", "tokio/net"]
+
+tokio-tls = ["tokio", "dep:tokio-rustls", "__tls"]
+tokio-https = ["tokio-tls", "__https"]
+tokio-quic = ["tokio", "quinn/runtime-tokio", "__quic"]
+tokio-h3 = ["tokio-quic", "__h3"]
+
+tls-aws-lc-rs = ["tokio-rustls?/aws-lc-rs", "rustls/aws_lc_rs", "__tls"]
 https-aws-lc-rs = ["tls-aws-lc-rs", "__https"]
 quic-aws-lc-rs = ["quinn/rustls-aws-lc-rs", "tls-aws-lc-rs", "__quic"]
 h3-aws-lc-rs = ["quic-aws-lc-rs", "__h3"]
 
-tls-ring = ["tokio-rustls/ring", "__tls"]
+tls-ring = ["tokio-rustls?/ring", "rustls/ring", "__tls"]
 https-ring = ["tls-ring", "__https"]
 quic-ring = ["quinn/rustls-ring", "tls-ring", "__quic"]
 h3-ring = ["quic-ring", "__h3"]
 
-__tls = ["dep:bytes", "dep:rustls", "dep:rustls-pki-types", "dep:tokio-rustls", "std", "tokio"]
+__tls = ["dep:bytes", "dep:rustls", "dep:rustls-pki-types", "std"]
 __https = ["dep:bytes", "dep:h2", "dep:http", "std"]
-__quic = ["dep:bytes", "dep:pin-project-lite", "dep:quinn", "std"]
-__h3 = ["dep:h3", "dep:h3-quinn", "dep:http", "std"]
+__quic = ["dep:bytes", "dep:pin-project-lite", "dep:quinn", "std", "__tls"]
+__h3 = ["dep:h3", "dep:h3-quinn", "dep:http", "std", "__quic"]
 
 rustls-platform-verifier = ["dep:rustls-platform-verifier", "std"]
 
@@ -63,8 +71,6 @@ __dnssec = ["dep:bitflags", "dep:rustls-pki-types", "dep:time", "std"]
 testing = ["std"]
 
 text-parsing = ["std"]
-tokio = ["std", "tokio/rt", "tokio/rt-multi-thread", "tokio/net"]
-default = ["std", "tokio"]
 
 serde = ["dep:serde", "std", "url/serde"]
 
@@ -143,3 +149,18 @@ workspace = true
 skip_optional_dependencies = true
 max_combination_size = 2
 denylist = ["__tls", "__https", "__quic", "__h3", "__dnssec"]
+skip_feature_sets = [
+    ["tokio-h3"],
+    ["tokio-https"],
+    ["tokio-quic"],
+    ["tokio-tls"],
+
+    ["tokio", "h3-aws-lc-rs"],
+    ["tokio", "h3-ring"],
+    ["tokio", "https-aws-lc-rs"],
+    ["tokio", "https-ring"],
+    ["tokio", "quic-aws-lc-rs"],
+    ["tokio", "quic-ring"],
+    ["tokio", "tls-aws-lc-rs"],
+    ["tokio", "tls-ring"],
+]

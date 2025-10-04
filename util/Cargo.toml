@@ -30,6 +30,31 @@ codecov = { repository = "hickory-dns/hickory-dns", branch = "main", service = "
 maintenance = { status = "actively-developed" }
 
 [features]
+tokio-tls = [
+    "hickory-proto/tokio-tls",
+    "hickory-client/tokio-tls",
+    "hickory-resolver/tokio-tls",
+    "hickory-recursor/tokio-tls",
+]
+tokio-https = [
+    "hickory-proto/tokio-https",
+    "hickory-client/tokio-https",
+    "hickory-resolver/tokio-https",
+    "hickory-recursor/tokio-https",
+]
+tokio-quic = [
+    "hickory-proto/tokio-quic",
+    "hickory-client/tokio-quic",
+    "hickory-resolver/tokio-quic",
+    "hickory-recursor/tokio-quic",
+]
+tokio-h3 = [
+    "hickory-proto/tokio-h3",
+    "hickory-client/tokio-h3",
+    "hickory-resolver/tokio-h3",
+    "hickory-recursor/tokio-h3",
+]
+
 tls-aws-lc-rs = [
     "hickory-proto/tls-aws-lc-rs",
     "hickory-client/tls-aws-lc-rs",
@@ -125,3 +150,18 @@ webpki-roots = { workspace = true, optional = true }
 skip_optional_dependencies = true
 max_combination_size = 2
 denylist = ["__tls", "__https", "__quic", "__h3", "__dnssec"]
+skip_feature_sets = [
+    ["h3-aws-lc-rs"],
+    ["h3-ring"],
+    ["https-aws-lc-rs"],
+    ["https-ring"],
+    ["quic-aws-lc-rs"],
+    ["quic-ring"],
+    ["tls-aws-lc-rs"],
+    ["tls-ring"],
+
+    ["tokio-h3"],
+    ["tokio-https"],
+    ["tokio-quic"],
+    ["tokio-tls"],
+]

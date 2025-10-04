@@ -114,6 +114,10 @@ jobs:
           [
             default,
             no-default-features,
+            tokio-tls,
+            tokio-https,
+            tokio-quic,
+            tokio-h3,
             tls-aws-lc-rs,
             https-aws-lc-rs,
             quic-aws-lc-rs,

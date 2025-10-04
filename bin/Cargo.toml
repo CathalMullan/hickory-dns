@@ -40,6 +40,11 @@ sqlite = ["hickory-server/sqlite", "dep:rusqlite"]
 prometheus-metrics = ["metrics", "dep:http", "dep:hyper", "dep:hyper-util", "dep:metrics-exporter-prometheus", "dep:tokio-util"]
 metrics = ["hickory-server/metrics", "dep:metrics", "dep:metrics-process"]
 
+tokio-tls = ["hickory-server/tokio-tls"]
+tokio-https = ["hickory-server/tokio-https"]
+tokio-quic = ["hickory-server/tokio-quic"]
+tokio-h3 = ["hickory-server/tokio-h3"]
+
 tls-aws-lc-rs = ["hickory-server/tls-aws-lc-rs", "__tls"]
 https-aws-lc-rs = ["hickory-server/https-aws-lc-rs", "tls-aws-lc-rs", "__https"]
 quic-aws-lc-rs = ["hickory-server/quic-aws-lc-rs", "tls-aws-lc-rs", "__quic"]
@@ -124,3 +129,18 @@ workspace = true
 skip_optional_dependencies = true
 max_combination_size = 2
 denylist = ["__tls", "__https", "__quic", "__h3", "__dnssec"]
+skip_feature_sets = [
+    ["h3-aws-lc-rs"],
+    ["h3-ring"],
+    ["https-aws-lc-rs"],
+    ["https-ring"],
+    ["quic-aws-lc-rs"],
+    ["quic-ring"],
+    ["tls-aws-lc-rs"],
+    ["tls-ring"],
+
+    ["tokio-h3"],
+    ["tokio-https"],
+    ["tokio-quic"],
+    ["tokio-tls"],
+]

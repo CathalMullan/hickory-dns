@@ -28,6 +28,13 @@ license.workspace = true
 default = ["system-config", "tokio"]
 backtrace = ["dep:backtrace", "hickory-proto/backtrace"]
 
+tokio = ["dep:tokio", "tokio/rt", "hickory-proto/tokio"]
+
+tokio-tls = ["hickory-proto/tokio-tls", "__tls"]
+tokio-https = ["hickory-proto/tokio-https", "__https"]
+tokio-quic = ["hickory-proto/tokio-quic", "__quic"]
+tokio-h3 = ["hickory-proto/tokio-h3", "__h3"]
+
 tls-aws-lc-rs = ["hickory-proto/tls-aws-lc-rs", "__tls"]
 https-aws-lc-rs = ["hickory-proto/https-aws-lc-rs", "__https"]
 quic-aws-lc-rs = ["hickory-proto/quic-aws-lc-rs", "__quic", "quinn/rustls-aws-lc-rs"]
@@ -52,8 +59,6 @@ __dnssec = []
 
 serde = ["dep:serde", "hickory-proto/serde"]
 system-config = ["dep:ipconfig", "dep:resolv-conf", "dep:jni", "dep:ndk-context"]
-
-tokio = ["dep:tokio", "tokio/rt", "hickory-proto/tokio"]
 
 [lib]
 name = "hickory_resolver"
@@ -129,3 +134,18 @@ workspace = true
 skip_optional_dependencies = true
 max_combination_size = 2
 denylist = ["__tls", "__https", "__quic", "__h3", "__dnssec"]
+skip_feature_sets = [
+    ["h3-aws-lc-rs"],
+    ["h3-ring"],
+    ["https-aws-lc-rs"],
+    ["https-ring"],
+    ["quic-aws-lc-rs"],
+    ["quic-ring"],
+    ["tls-aws-lc-rs"],
+    ["tls-ring"],
+
+    ["tokio-h3"],
+    ["tokio-https"],
+    ["tokio-quic"],
+    ["tokio-tls"],
+]

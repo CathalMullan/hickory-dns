@@ -31,6 +31,18 @@ no-default-features: (default "--no-default-features" "--ignore=\\{hickory-compa
 std: (default "--no-default-features" "--ignore=\\{hickory-compatibility,hickory-proto\\}")
     cargo {{MSRV}} test --locked --package hickory-proto --no-default-features --features="std"
 
+# Check, build, and test all crates with tokio-tls enabled
+tokio-tls: (default "--features=tokio-tls" "--ignore=\\{hickory-compatibility,test-support\\}")
+
+# Check, build, and test all crates with tokio-https enabled
+tokio-https: (default "--features=tokio-https" "--ignore=\\{hickory-compatibility,test-support\\}")
+
+# Check, build, and test all crates with tokio-quic enabled
+tokio-quic: (default "--features=tokio-quic" "--ignore=\\{hickory-compatibility,test-support\\}")
+
+# Check, build, and test all crates with tokio-h3 enabled
+tokio-h3: (default "--features=tokio-h3" "--ignore=\\{hickory-compatibility,hickory-client,test-support\\}")
+
 # Check, build, and test all crates with tls-aws-lc-rs enabled
 tls-aws-lc-rs: (default "--features=tls-aws-lc-rs" "--ignore=\\{hickory-compatibility,test-support\\}")
 
