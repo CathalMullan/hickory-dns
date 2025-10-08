@@ -6,15 +6,17 @@ use {
         Resolver,
         config::{CLOUDFLARE, GOOGLE, ResolverConfig},
         name_server::ConnectionProvider,
-        proto::runtime::{RuntimeProvider, TokioHandle, TokioTime, iocompat::AsyncIoTokioAsStd},
+        proto::runtime::{
+            RuntimeProvider, TokioHandle, TokioTime,
+            iocompat::{FuturesIoAdapter, TokioIoAdapter},
+        },
     },
-    std::future::Future,
-    std::io,
-    std::net::SocketAddr,
-    std::pin::Pin,
-    std::time::Duration,
-    tokio::net::{TcpSocket, TcpStream, UdpSocket},
-    tokio::time::timeout,
+    std::{future::Future, io, net::SocketAddr, pin::Pin, time::Duration},
+    tokio::{
+        net::{TcpListener, TcpSocket, TcpStream, UdpSocket},
+        time::timeout,
+    },
+    tokio_rustls::TlsStream,
 };
 
 #[cfg(any(feature = "webpki-roots", feature = "rustls-platform-verifier"))]
@@ -28,10 +30,20 @@ impl RuntimeProvider for PrintProvider {
     type Handle = TokioHandle;
     type Timer = TokioTime;
     type Udp = UdpSocket;
-    type Tcp = AsyncIoTokioAsStd<TcpStream>;
+    type Tcp = TokioIoAdapter<TcpStream>;
+    type TcpListener = TcpListener;
+    type Tls = TokioIoAdapter<TlsStream<FuturesIoAdapter<Self::Tcp>>>;
 
     fn create_handle(&self) -> Self::Handle {
         self.handle.clone()
+    }
+
+    fn bind_tcp(
+        &self,
+        addr: SocketAddr,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::TcpListener>> + Send>> {
+        println!("Binding TCP listener to: {addr}");
+        Box::pin(tokio::net::TcpListener::bind(addr))
     }
 
     fn connect_tcp(
@@ -54,13 +66,71 @@ impl RuntimeProvider for PrintProvider {
             let future = socket.connect(server_addr);
             let wait_for = wait_for.unwrap_or_else(|| Duration::from_secs(5));
             match timeout(wait_for, future).await {
-                Ok(Ok(socket)) => Ok(AsyncIoTokioAsStd(socket)),
+                Ok(Ok(socket)) => Ok(TokioIoAdapter(socket)),
                 Ok(Err(e)) => Err(e),
                 Err(_) => Err(io::Error::new(
                     io::ErrorKind::TimedOut,
                     format!("connection to {server_addr:?} timed out after {wait_for:?}"),
                 )),
             }
+        })
+    }
+
+    fn accept_tcp<'a>(
+        &'a self,
+        listener: &'a mut Self::TcpListener,
+    ) -> Pin<Box<dyn Future<Output = io::Result<(Self::Tcp, SocketAddr)>> + Send + 'a>> {
+        Box::pin(async move {
+            let (stream, addr) = listener.accept().await?;
+            println!("Accepted TCP connection from: {addr}");
+            Ok((TokioIoAdapter(stream), addr))
+        })
+    }
+
+    #[cfg(feature = "__tls")]
+    fn connect_tls(
+        &self,
+        stream: Self::Tcp,
+        server_name: rustls::pki_types::ServerName<'static>,
+        client_config: std::sync::Arc<rustls::ClientConfig>,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::Tls>> + Send>> {
+        use tokio_rustls::TlsConnector;
+
+        let early_data_enabled = client_config.enable_early_data;
+        let tls_connector = TlsConnector::from(client_config).early_data(early_data_enabled);
+
+        Box::pin(async move {
+            let wrapped = FuturesIoAdapter(stream);
+            let tls_stream = tls_connector
+                .connect(server_name, wrapped)
+                .await
+                .map_err(|e| {
+                    io::Error::new(io::ErrorKind::ConnectionRefused, format!("TLS error: {e}"))
+                })?;
+
+            println!("TLS client connection established");
+            Ok(TokioIoAdapter(TlsStream::Client(tls_stream)))
+        })
+    }
+
+    #[cfg(feature = "__tls")]
+    fn accept_tls<'a>(
+        &'a self,
+        stream: Self::Tcp,
+        server_config: std::sync::Arc<rustls::ServerConfig>,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::Tls>> + Send + 'a>> {
+        use tokio_rustls::TlsAcceptor;
+
+        let tls_acceptor = TlsAcceptor::from(server_config);
+
+        Box::pin(async move {
+            let wrapped = FuturesIoAdapter(stream);
+            let tls_stream = tls_acceptor.accept(wrapped).await.map_err(|e| {
+                io::Error::new(io::ErrorKind::ConnectionRefused, format!("TLS error: {e}"))
+            })?;
+
+            println!("TLS server connection accepted");
+            Ok(TokioIoAdapter(TlsStream::Server(tls_stream)))
         })
     }
 
@@ -73,6 +143,12 @@ impl RuntimeProvider for PrintProvider {
         // For example, you try to use a http proxy and encapsulate UDP packets inside a TCP stream.
         println!("Create udp local_addr: {local_addr}, server_addr: {server_addr}");
         Box::pin(UdpSocket::bind(local_addr))
+    }
+
+    fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Self::Udp> {
+        println!("Wrapping std UDP socket into async socket");
+        socket.set_nonblocking(true)?;
+        UdpSocket::from_std(socket)
     }
 }
 

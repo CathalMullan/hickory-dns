@@ -170,6 +170,7 @@ impl<P: RuntimeProvider> ConnectionProvider for P {
                     remote_addr,
                     server_name.to_owned(),
                     Arc::new(tls_config),
+                    self.clone(),
                 );
 
                 Connecting::Tls(DnsExchange::connect(DnsMultiplexer::with_timeout(
@@ -184,6 +185,7 @@ impl<P: RuntimeProvider> ConnectionProvider for P {
                     remote_addr,
                     server_name.clone(),
                     path.clone(),
+                    self.clone(),
                 )))
             }
             #[cfg(feature = "__quic")]
@@ -194,7 +196,7 @@ impl<P: RuntimeProvider> ConnectionProvider for P {
                 });
 
                 Connecting::Quic(DnsExchange::connect(
-                    QuicClientStream::builder()
+                    QuicClientStream::builder(self.clone())
                         .crypto_config(cx.tls.config.clone())
                         .build_with_future(
                             binder.bind_quic(bind_addr, remote_addr)?,
@@ -218,7 +220,7 @@ impl<P: RuntimeProvider> ConnectionProvider for P {
                 });
 
                 Connecting::H3(DnsExchange::connect(
-                    H3ClientStream::builder()
+                    H3ClientStream::builder(self.clone())
                         .crypto_config(cx.tls.config.clone())
                         .disable_grease(*disable_grease)
                         .build_with_future(

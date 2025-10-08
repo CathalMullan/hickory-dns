@@ -7,7 +7,7 @@
 
 use std::future::{Future, ready};
 use std::io;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
@@ -64,10 +64,15 @@ impl DnsTcpStream for TcpPlaceholder {
     type Time = TokioTime;
 }
 
+#[derive(Debug)]
 pub struct UdpPlaceholder;
 
 impl DnsUdpSocket for UdpPlaceholder {
     type Time = TokioTime;
+
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        Ok(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0))
+    }
 
     fn poll_recv_from(
         &self,
@@ -90,6 +95,9 @@ impl DnsUdpSocket for UdpPlaceholder {
     }
 }
 
+#[derive(Debug)]
+pub struct TcpListenerPlaceholder;
+
 #[derive(Clone, Default)]
 pub struct MockRuntimeProvider;
 
@@ -98,9 +106,19 @@ impl RuntimeProvider for MockRuntimeProvider {
     type Timer = TokioTime;
     type Udp = UdpPlaceholder;
     type Tcp = TcpPlaceholder;
+    type TcpListener = TcpListenerPlaceholder;
+    #[cfg(feature = "__tls")]
+    type Tls = TcpPlaceholder;
 
     fn create_handle(&self) -> Self::Handle {
         TokioHandle::default()
+    }
+
+    fn bind_tcp(
+        &self,
+        _addr: SocketAddr,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::TcpListener>> + Send>> {
+        Box::pin(async { Ok(TcpListenerPlaceholder) })
     }
 
     fn connect_tcp(
@@ -112,12 +130,47 @@ impl RuntimeProvider for MockRuntimeProvider {
         Box::pin(async { Ok(TcpPlaceholder) })
     }
 
+    fn accept_tcp<'a>(
+        &'a self,
+        _listener: &'a mut Self::TcpListener,
+    ) -> Pin<Box<dyn Future<Output = io::Result<(Self::Tcp, SocketAddr)>> + Send + 'a>> {
+        Box::pin(async {
+            Ok((
+                TcpPlaceholder,
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0),
+            ))
+        })
+    }
+
+    #[cfg(feature = "__tls")]
+    fn connect_tls(
+        &self,
+        stream: Self::Tcp,
+        _server_name: rustls::pki_types::ServerName<'static>,
+        _client_config: Arc<rustls::ClientConfig>,
+    ) -> Pin<Box<dyn Future<Output = std::io::Result<Self::Tls>> + Send>> {
+        Box::pin(async move { Ok(stream) })
+    }
+
+    #[cfg(feature = "__tls")]
+    fn accept_tls<'a>(
+        &'a self,
+        stream: Self::Tcp,
+        _server_config: Arc<rustls::ServerConfig>,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::Tls>> + Send + 'a>> {
+        Box::pin(async move { Ok(stream) })
+    }
+
     fn bind_udp(
         &self,
         _local_addr: SocketAddr,
         _server_addr: SocketAddr,
     ) -> Pin<Box<dyn Send + Future<Output = std::io::Result<Self::Udp>>>> {
         Box::pin(async { Ok(UdpPlaceholder) })
+    }
+
+    fn wrap_udp_socket(&self, _socket: UdpSocket) -> io::Result<Self::Udp> {
+        Ok(UdpPlaceholder)
     }
 }
 

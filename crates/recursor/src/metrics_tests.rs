@@ -29,6 +29,8 @@ use metrics_util::{
     CompositeKey, MetricKind,
     debugging::{DebugValue, DebuggingRecorder},
 };
+use rustls::ClientConfig;
+use rustls_pki_types::ServerName;
 use test_support::subscribe;
 use tokio::runtime::Builder;
 use tracing::{error, info};
@@ -233,9 +235,18 @@ impl RuntimeProvider for MockProvider {
     type Udp = MockUdpSocket;
 
     type Tcp = MockTcpStream;
+    type TcpListener = MockTcpListener;
+    type Tls = MockTcpStream;
 
     fn create_handle(&self) -> Self::Handle {
         self.tokio_handle.clone()
+    }
+
+    fn bind_tcp(
+        &self,
+        _addr: SocketAddr,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::TcpListener>> + Send>> {
+        Box::pin(ready(Ok(MockTcpListener::new(self.handler.clone()))))
     }
 
     fn connect_tcp(
@@ -250,20 +261,89 @@ impl RuntimeProvider for MockProvider {
         ))))
     }
 
+    fn accept_tcp<'a>(
+        &'a self,
+        listener: &'a mut Self::TcpListener,
+    ) -> Pin<Box<dyn Future<Output = io::Result<(Self::Tcp, SocketAddr)>> + Send + 'a>> {
+        Box::pin(ready(listener.accept()))
+    }
+
+    fn connect_tls(
+        &self,
+        stream: Self::Tcp,
+        _server_name: ServerName<'static>,
+        _client_config: Arc<ClientConfig>,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::Tls>> + Send>> {
+        Box::pin(ready(Ok(stream)))
+    }
+
+    fn accept_tls<'a>(
+        &'a self,
+        stream: Self::Tcp,
+        _server_config: Arc<rustls::ServerConfig>,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Self::Tls>> + Send + 'a>> {
+        Box::pin(ready(Ok(stream)))
+    }
+
     fn bind_udp(
         &self,
-        _local_addr: SocketAddr,
+        local_addr: SocketAddr,
         _server_addr: SocketAddr,
     ) -> Pin<Box<dyn Future<Output = io::Result<Self::Udp>> + Send>> {
-        Box::pin(ready(Ok(MockUdpSocket::new(self.handler.clone()))))
+        Box::pin(ready(Ok(MockUdpSocket::new(
+            local_addr,
+            self.handler.clone(),
+        ))))
+    }
+
+    fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Self::Udp> {
+        Ok(MockUdpSocket::new(
+            socket.local_addr()?,
+            self.handler.clone(),
+        ))
+    }
+}
+
+struct MockTcpListener {
+    handler: Arc<dyn MockHandler + Send + Sync + 'static>,
+}
+
+impl MockTcpListener {
+    fn new(handler: Arc<dyn MockHandler + Send + Sync + 'static>) -> Self {
+        Self { handler }
+    }
+
+    fn accept(&mut self) -> io::Result<(MockTcpStream, SocketAddr)> {
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0);
+        Ok((MockTcpStream::new(self.handler.clone(), addr.ip()), addr))
+    }
+}
+
+impl std::fmt::Debug for MockTcpListener {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MockTcpListener")
+            .field("handler", &"<handler>")
+            .finish()
     }
 }
 
 struct MockUdpSocket {
     inner: Mutex<MockUdpSocketInner>,
+    addr: SocketAddr,
     handler: Arc<dyn MockHandler + Send + Sync + 'static>,
 }
 
+impl std::fmt::Debug for MockUdpSocket {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MockUdpSocket")
+            .field("inner", &self.inner)
+            .field("addr", &self.addr)
+            .field("handler", &"<handler>")
+            .finish()
+    }
+}
+
+#[derive(Debug)]
 struct MockUdpSocketInner {
     /// Response messages ready to be returned to the client.
     incoming_datagrams: VecDeque<(Message, SocketAddr)>,
@@ -272,12 +352,13 @@ struct MockUdpSocketInner {
 }
 
 impl MockUdpSocket {
-    fn new(handler: Arc<dyn MockHandler + Send + Sync + 'static>) -> Self {
+    fn new(addr: SocketAddr, handler: Arc<dyn MockHandler + Send + Sync + 'static>) -> Self {
         Self {
             inner: Mutex::new(MockUdpSocketInner {
                 incoming_datagrams: VecDeque::new(),
                 waker: None,
             }),
+            addr,
             handler,
         }
     }
@@ -285,6 +366,10 @@ impl MockUdpSocket {
 
 impl DnsUdpSocket for MockUdpSocket {
     type Time = TokioTime;
+
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        Ok(self.addr)
+    }
 
     fn poll_recv_from(
         &self,

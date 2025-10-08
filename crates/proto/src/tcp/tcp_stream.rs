@@ -13,9 +13,9 @@ use core::net::SocketAddr;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 use core::time::Duration;
-use std::io;
+use std::io::{self, IoSlice};
 
-use futures_io::{AsyncRead, AsyncWrite, IoSlice};
+use futures_io::{AsyncRead, AsyncWrite};
 use futures_util::stream::Stream;
 use futures_util::{self, future::Future, ready};
 use tracing::{debug, trace};

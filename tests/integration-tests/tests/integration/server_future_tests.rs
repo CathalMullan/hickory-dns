@@ -345,7 +345,7 @@ fn new_catalog() -> Catalog {
 
 async fn server_thread_udp(udp_socket: UdpSocket, server_continue: Arc<AtomicBool>) {
     let catalog = new_catalog();
-    let mut server = Server::new(catalog);
+    let mut server = Server::new(catalog, TokioRuntimeProvider::new());
     server.register_socket(udp_socket);
 
     while server_continue.load(Ordering::Relaxed) {
@@ -357,7 +357,7 @@ async fn server_thread_udp(udp_socket: UdpSocket, server_continue: Arc<AtomicBoo
 
 async fn server_thread_tcp(tcp_listener: TcpListener, server_continue: Arc<AtomicBool>) {
     let catalog = new_catalog();
-    let mut server = Server::new(catalog);
+    let mut server = Server::new(catalog, TokioRuntimeProvider::new());
     server.register_listener(tcp_listener, Duration::from_secs(30));
 
     while server_continue.load(Ordering::Relaxed) {
@@ -374,7 +374,7 @@ async fn server_thread_tls(
     cert_chain: Arc<dyn ResolvesServerCert>,
 ) {
     let catalog = new_catalog();
-    let mut server = Server::new(catalog);
+    let mut server = Server::new(catalog, TokioRuntimeProvider::new());
 
     // let pkcs12 = Pkcs12::from_der(&pkcs12_der)
     //     .expect("bad pkcs12 der")

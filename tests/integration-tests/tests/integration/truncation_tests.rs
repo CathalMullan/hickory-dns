@@ -29,7 +29,7 @@ async fn test_truncation() {
     println!("udp_socket on port: {nameserver}");
 
     // Create and start the server.
-    let mut server = Server::new(new_large_catalog(128));
+    let mut server = Server::new(new_large_catalog(128), TokioRuntimeProvider::new());
     server.register_socket(udp_socket);
 
     // Create the UDP client.

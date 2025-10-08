@@ -22,18 +22,16 @@ use futures_util::{
 };
 use tracing::debug;
 
-#[cfg(all(feature = "__https", feature = "tokio"))]
+#[cfg(feature = "__https")]
 use crate::h2::{HttpsClientConnect, HttpsClientStream};
-#[cfg(all(feature = "__h3", feature = "tokio"))]
+#[cfg(feature = "__h3")]
 use crate::h3::{H3ClientConnect, H3ClientStream};
 use crate::op::{DnsRequest, DnsResponse};
-#[cfg(all(feature = "__quic", feature = "tokio"))]
+#[cfg(feature = "__quic")]
 use crate::quic::{QuicClientConnect, QuicClientStream};
 use crate::runtime::RuntimeProvider;
 #[cfg(feature = "std")]
 use crate::runtime::Time;
-#[cfg(feature = "__tls")]
-use crate::rustls::TlsClientStream;
 use crate::tcp::TcpClientStream;
 use crate::udp::{UdpClientConnect, UdpClientStream};
 #[cfg(any(feature = "std", feature = "no-std-rand"))]
@@ -63,18 +61,18 @@ pub enum Connecting<P: RuntimeProvider> {
     Tls(
         DnsExchangeConnect<
             DnsMultiplexerConnect<
-                BoxFuture<'static, Result<TlsClientStream<<P as RuntimeProvider>::Tcp>, io::Error>>,
-                TlsClientStream<<P as RuntimeProvider>::Tcp>,
+                BoxFuture<'static, Result<TcpClientStream<P::Tls>, io::Error>>,
+                TcpClientStream<P::Tls>,
             >,
-            DnsMultiplexer<TlsClientStream<<P as RuntimeProvider>::Tcp>>,
+            DnsMultiplexer<TcpClientStream<P::Tls>>,
             P,
         >,
     ),
-    #[cfg(all(feature = "__https", feature = "tokio"))]
-    Https(DnsExchangeConnect<HttpsClientConnect<P::Tcp>, HttpsClientStream, P>),
-    #[cfg(all(feature = "__quic", feature = "tokio"))]
+    #[cfg(feature = "__https")]
+    Https(DnsExchangeConnect<HttpsClientConnect<P>, HttpsClientStream, P>),
+    #[cfg(feature = "__quic")]
     Quic(DnsExchangeConnect<QuicClientConnect, QuicClientStream, P>),
-    #[cfg(all(feature = "__h3", feature = "tokio"))]
+    #[cfg(feature = "__h3")]
     H3(DnsExchangeConnect<H3ClientConnect, H3ClientStream, P>),
 }
 

@@ -17,14 +17,9 @@ use futures_util::future::BoxFuture;
 use rustls::{ClientConfig, pki_types::ServerName};
 
 use crate::runtime::RuntimeProvider;
-use crate::runtime::iocompat::{AsyncIoStdAsTokio, AsyncIoTokioAsStd};
 use crate::rustls::tls_stream::{tls_connect_with_bind_addr, tls_connect_with_future};
-use crate::tcp::{DnsTcpStream, TcpClientStream};
+use crate::tcp::TcpClientStream;
 use crate::xfer::BufDnsStreamHandle;
-
-/// Type of TlsClientStream used with Rustls
-pub type TlsClientStream<S> =
-    TcpClientStream<AsyncIoTokioAsStd<tokio_rustls::client::TlsStream<AsyncIoStdAsTokio<S>>>>;
 
 /// Creates a new TlsStream to the specified name_server
 ///
@@ -40,7 +35,7 @@ pub fn tls_client_connect<P: RuntimeProvider>(
     client_config: Arc<ClientConfig>,
     provider: P,
 ) -> (
-    BoxFuture<'static, Result<TlsClientStream<P::Tcp>, io::Error>>,
+    BoxFuture<'static, Result<TcpClientStream<P::Tls>, io::Error>>,
     BufDnsStreamHandle,
 ) {
     tls_client_connect_with_bind_addr(name_server, None, server_name, client_config, provider)
@@ -61,7 +56,7 @@ pub fn tls_client_connect_with_bind_addr<P: RuntimeProvider>(
     client_config: Arc<ClientConfig>,
     provider: P,
 ) -> (
-    BoxFuture<'static, Result<TlsClientStream<P::Tcp>, io::Error>>,
+    BoxFuture<'static, Result<TcpClientStream<P::Tls>, io::Error>>,
     BufDnsStreamHandle,
 ) {
     let (stream_future, sender) =
@@ -78,21 +73,22 @@ pub fn tls_client_connect_with_bind_addr<P: RuntimeProvider>(
 ///
 /// * `future` - A future producing DnsTcpStream
 /// * `dns_name` - The DNS name associated with a certificate
-pub fn tls_client_connect_with_future<S, F>(
+#[allow(clippy::type_complexity)]
+pub fn tls_client_connect_with_future<P: RuntimeProvider, F>(
     future: F,
     socket_addr: SocketAddr,
     server_name: ServerName<'static>,
     client_config: Arc<ClientConfig>,
+    provider: P,
 ) -> (
-    BoxFuture<'static, Result<TlsClientStream<S>, io::Error>>,
+    BoxFuture<'static, Result<TcpClientStream<P::Tls>, io::Error>>,
     BufDnsStreamHandle,
 )
 where
-    S: DnsTcpStream,
-    F: Future<Output = io::Result<S>> + Send + Unpin + 'static,
+    F: Future<Output = io::Result<P::Tcp>> + Send + 'static,
 {
     let (stream_future, sender) =
-        tls_connect_with_future(future, socket_addr, server_name, client_config);
+        tls_connect_with_future(future, socket_addr, server_name, client_config, provider);
 
     let new_future = Box::pin(async { Ok(TcpClientStream::from_stream(stream_future.await?)) });
 

@@ -54,14 +54,14 @@ fn test_example_quic_toml_startup() {
             .with_no_client_auth();
 
         let client = Client::<TokioRuntimeProvider>::connect(
-            QuicClientStream::builder()
+            QuicClientStream::builder(TokioRuntimeProvider::new())
                 .crypto_config(client_config)
                 .build(addr, Arc::from("ns.example.com")),
         );
 
         // ipv4 should succeed
         let (mut client, bg) = io_loop.block_on(client).expect("client failed to connect");
-        hickory_proto::runtime::spawn_bg(&io_loop, bg);
+        io_loop.spawn(bg);
 
         query_a(&mut io_loop, &mut client);
 

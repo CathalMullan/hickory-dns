@@ -194,7 +194,11 @@ async fn query_validate_false_unsigned_zone_no_soa() {
 async fn setup_authoritative_server(
     signed: bool,
     soa: bool,
-) -> (SocketAddr, Server<Catalog>, PublicKeyBuf) {
+) -> (
+    SocketAddr,
+    Server<Catalog, TokioRuntimeProvider>,
+    PublicKeyBuf,
+) {
     // Zone setup
     let key = Ed25519SigningKey::from_pkcs8(&Ed25519SigningKey::generate_pkcs8().unwrap()).unwrap();
     let public_key = key.to_public_key().unwrap();
@@ -243,7 +247,7 @@ async fn setup_authoritative_server(
     let local_addr = udp_socket.local_addr().unwrap();
     let mut catalog = Catalog::new();
     catalog.upsert(Name::root().into(), vec![Arc::new(handler)]);
-    let mut server = Server::new(catalog);
+    let mut server = Server::new(catalog, TokioRuntimeProvider::new());
     server.register_socket(udp_socket);
 
     (local_addr, server, public_key)
@@ -252,7 +256,10 @@ async fn setup_authoritative_server(
 async fn setup_client_forwarder(
     name_server_addr: SocketAddr,
     public_key: Option<&PublicKeyBuf>,
-) -> (Client<TokioRuntimeProvider>, Server<Catalog>) {
+) -> (
+    Client<TokioRuntimeProvider>,
+    Server<Catalog, TokioRuntimeProvider>,
+) {
     // Server setup
     let mut config = NameServerConfig::udp(name_server_addr.ip());
     config.connections[0].port = name_server_addr.port();
@@ -272,7 +279,7 @@ async fn setup_client_forwarder(
     let local_addr = udp_socket.local_addr().unwrap();
     let mut catalog = Catalog::new();
     catalog.upsert(Name::root().into(), vec![Arc::new(handler)]);
-    let mut server = Server::new(catalog);
+    let mut server = Server::new(catalog, TokioRuntimeProvider::new());
     server.register_socket(udp_socket);
 
     // Client setup

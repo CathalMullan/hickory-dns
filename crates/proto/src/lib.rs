@@ -64,7 +64,7 @@ pub mod http;
 #[cfg(feature = "mdns")]
 pub mod multicast;
 pub mod op;
-#[cfg(all(feature = "__quic", feature = "tokio"))]
+#[cfg(feature = "__quic")]
 pub mod quic;
 pub mod rr;
 #[cfg(feature = "std")]

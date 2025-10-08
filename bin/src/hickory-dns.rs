@@ -40,6 +40,7 @@ use std::{
 };
 
 use clap::Parser;
+use hickory_proto::runtime::TokioRuntimeProvider;
 #[cfg(feature = "metrics")]
 use metrics::{Counter, Unit, counter, describe_counter, describe_gauge, gauge};
 #[cfg(feature = "metrics")]
@@ -365,7 +366,12 @@ async fn async_run(args: Cli) -> Result<(), String> {
 
     // now, run the server, based on the config
     #[cfg_attr(not(feature = "__tls"), allow(unused_mut))]
-    let mut server = Server::with_access(catalog, deny_networks, allow_networks);
+    let mut server = Server::with_access(
+        catalog,
+        deny_networks,
+        allow_networks,
+        TokioRuntimeProvider::new(),
+    );
 
     if !args.disable_udp && !config.disable_udp() {
         // load all udp listeners
@@ -519,7 +525,7 @@ async fn async_run(args: Cli) -> Result<(), String> {
 #[cfg(feature = "__tls")]
 fn config_tls(
     tls_port: Option<u16>,
-    server: &mut Server<Catalog>,
+    server: &mut Server<Catalog, TokioRuntimeProvider>,
     config: &Config,
     tls_cert_config: &TlsCertConfig,
     zone_dir: &Path,
@@ -573,7 +579,7 @@ fn config_tls(
 #[cfg(feature = "__https")]
 fn config_https(
     https_port: Option<u16>,
-    server: &mut Server<Catalog>,
+    server: &mut Server<Catalog, TokioRuntimeProvider>,
     config: &Config,
     tls_cert_config: &TlsCertConfig,
     zone_dir: &Path,
@@ -634,7 +640,7 @@ fn config_https(
 #[cfg(feature = "__quic")]
 fn config_quic(
     quic_port: Option<u16>,
-    server: &mut Server<Catalog>,
+    server: &mut Server<Catalog, TokioRuntimeProvider>,
     config: &Config,
     tls_cert_config: &TlsCertConfig,
     zone_dir: &Path,
@@ -660,15 +666,7 @@ fn config_quic(
 
         info!("Binding QUIC to {addr:?}");
 
-        let quic_listener = build_udp_socket(*addr, quic_listen_port)
-            .map_err(|err| format!("failed to bind to QUIC socket address {addr:?}: {err}"))?;
-
-        info!(
-            "listening for QUIC on {:?}",
-            quic_listener
-                .local_addr()
-                .map_err(|err| format!("failed to lookup local address: {err}"))?
-        );
+        let quic_socket_addr = SocketAddr::new(*addr, quic_listen_port);
 
         let mut tls_config = default_tls_server_config(b"doq", tls_cert)
             .map_err(|err| format!("failed to build default TLS config: {err}"))?;
@@ -677,14 +675,16 @@ fn config_quic(
             tls_config.key_log = Arc::new(KeyLogFile::new());
         }
 
-        server
+        let local_addr = server
             .register_quic_listener_and_tls_config(
-                quic_listener,
+                quic_socket_addr,
                 config.tcp_request_timeout(),
                 Arc::new(tls_config),
                 tls_cert_config.endpoint_name.clone(),
             )
             .map_err(|err| format!("failed to register QUIC listener: {err}"))?;
+
+        info!("listening for QUIC on {local_addr:?}");
     }
     Ok(())
 }

@@ -8,7 +8,7 @@ use futures::{StreamExt, future};
 use hickory_proto::{
     DnsStreamHandle,
     op::{Message, SerialMessage},
-    runtime::iocompat::AsyncIoTokioAsStd,
+    runtime::iocompat::TokioIoAdapter,
     tcp::TcpStream,
 };
 use tokio::net::{TcpListener, UdpSocket};
@@ -132,8 +132,7 @@ impl TcpServer {
         loop {
             let (stream, peer) = self.tcp.accept().await?;
             tokio::task::spawn(async move {
-                let (mut stream, mut sender) =
-                    TcpStream::from_stream(AsyncIoTokioAsStd(stream), peer);
+                let (mut stream, mut sender) = TcpStream::from_stream(TokioIoAdapter(stream), peer);
 
                 while let Some(Ok(msg)) = stream.next().await {
                     println!(

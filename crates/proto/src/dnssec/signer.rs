@@ -644,7 +644,7 @@ mod tests {
             signer_name: origin.clone(),
         };
 
-        let rrset = vec![
+        let rrset = [
             Record::from_rdata(
                 origin.clone(),
                 86400,
@@ -703,7 +703,7 @@ mod tests {
             signer_name: origin.clone(),
         };
 
-        let rrset = vec![
+        let rrset = [
             Record::from_rdata(
                 origin.clone(),
                 86400,
@@ -723,7 +723,7 @@ mod tests {
         let tbs = TBS::from_input(&origin, DNSClass::IN, &input, rrset.iter()).unwrap();
         assert!(!tbs.as_ref().is_empty());
 
-        let rrset = vec![
+        let rrset = [
             Record::from_rdata(
                 origin.clone(),
                 86400,

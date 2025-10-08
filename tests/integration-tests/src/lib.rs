@@ -19,8 +19,6 @@ use futures::{
     future::{self, BoxFuture},
     stream::{Stream, StreamExt},
 };
-#[cfg(feature = "__dnssec")]
-use tokio::net::UdpSocket;
 use tokio::time::{Duration, Instant, Sleep};
 
 #[cfg(feature = "__dnssec")]
@@ -36,7 +34,7 @@ use hickory_proto::{
 #[cfg(feature = "__dnssec")]
 use hickory_proto::{
     dnssec::{PublicKeyBuf, SigningKey, TrustAnchors, crypto::Ed25519SigningKey},
-    runtime::TokioRuntimeProvider,
+    runtime::{RuntimeProvider, TokioRuntimeProvider},
     udp::UdpClientStream,
 };
 #[cfg(feature = "__dnssec")]
@@ -266,17 +264,23 @@ pub fn generate_key() -> (Box<dyn SigningKey>, PublicKeyBuf) {
 /// Creates a server using a request handler, and creates a validating client connected to the
 /// server.
 #[cfg(feature = "__dnssec")]
-pub async fn setup_dnssec_client_server<H>(
+pub async fn setup_dnssec_client_server<H, P>(
     handler: H,
+    provider: P,
     public_key: &PublicKeyBuf,
-) -> (DnssecClient, Server<H>)
+) -> (DnssecClient, Server<H, P>)
 where
     H: RequestHandler,
+    P: RuntimeProvider,
 {
+    use hickory_proto::{runtime::Spawn, udp::DnsUdpSocket};
+
     // Server setup
-    let udp_socket = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
+    let local_addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 0));
+    let udp_socket = provider.bind_udp(local_addr, local_addr).await.unwrap();
     let local_addr = udp_socket.local_addr().unwrap();
-    let mut server = Server::new(handler);
+
+    let mut server = Server::new(handler, provider.clone());
     server.register_socket(udp_socket);
 
     // Client setup
@@ -288,7 +292,9 @@ where
         .build()
         .await
         .unwrap();
-    tokio::spawn(bg);
+
+    let mut handle = provider.create_handle();
+    handle.spawn(bg);
 
     (client, server)
 }

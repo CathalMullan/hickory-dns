@@ -114,7 +114,7 @@ rusqlite = { workspace = true, features = ["bundled"], optional = true }
 rustls = { workspace = true, optional = true }
 rustls-pki-types = { workspace = true, optional = true }
 time.workspace = true
-tokio = { workspace = true, features = ["time", "rt"] }
+tokio = { workspace = true, features = ["time", "rt", "io-util"] }
 tracing.workspace = true
 hickory-client.workspace = true
 hickory-proto = { workspace = true, features = ["testing", "std"] }

@@ -24,8 +24,9 @@ use test_support::subscribe;
 
 use crate::{
     op::{Message, Query},
-    quic::QuicClientStreamBuilder,
+    quic::QuicClientStream,
     rr::{Name, RecordType},
+    runtime::TokioRuntimeProvider,
     rustls::default_provider,
     xfer::DnsRequestSender,
 };
@@ -72,9 +73,11 @@ async fn test_quic_stream() {
     );
 
     // All testing is only done on local addresses, construct the server
+    let provider = TokioRuntimeProvider::new();
     let quic_ns = QuicServer::new(
         SocketAddr::from(([127, 0, 0, 1], 0)),
         Arc::new(certificate_and_key),
+        provider.clone(),
     )
     .await
     .expect("failed to initialize QuicServer");
@@ -98,7 +101,7 @@ async fn test_quic_stream() {
     client_config.key_log = Arc::new(KeyLogFile::new());
 
     println!("starting quic connect");
-    let builder = QuicClientStreamBuilder::default().crypto_config(client_config);
+    let builder = QuicClientStream::builder(provider).crypto_config(client_config);
     let mut client_stream = builder
         .build(server_addr, Arc::from("ns.example.com"))
         .await

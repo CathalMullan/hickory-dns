@@ -16,31 +16,18 @@ use std::io;
 use futures_util::future::BoxFuture;
 use rustls::ClientConfig;
 use rustls::pki_types::ServerName;
-use tokio::net::TcpStream as TokioTcpStream;
-use tokio::{self, time::timeout};
-use tokio_rustls::TlsConnector;
 
 use crate::runtime::RuntimeProvider;
-use crate::runtime::iocompat::{AsyncIoStdAsTokio, AsyncIoTokioAsStd};
 use crate::tcp::{DnsTcpStream, TcpStream};
-use crate::xfer::{BufDnsStreamHandle, CONNECT_TIMEOUT, StreamReceiver};
+use crate::xfer::BufDnsStreamHandle;
 
-/// Predefined type for abstracting the TlsClientStream with TokioTls
-pub type TokioTlsClientStream<S> = tokio_rustls::client::TlsStream<AsyncIoStdAsTokio<S>>;
-
-/// Predefined type for abstracting the TlsServerStream with TokioTls
-pub type TokioTlsServerStream = tokio_rustls::server::TlsStream<TokioTcpStream>;
-
-/// Predefined type for abstracting the base I/O TlsStream with TokioTls
-pub type TlsStream<S> = TcpStream<S>;
-
-/// Initializes a TlsStream with an existing tokio_tls::TlsStream.
+/// Initializes a TlsStream with an existing stream.
 ///
 /// This is intended for use with a TlsListener and Incoming connections
 pub fn tls_from_stream<S: DnsTcpStream>(
     stream: S,
     peer_addr: SocketAddr,
-) -> (TlsStream<S>, BufDnsStreamHandle) {
+) -> (TcpStream<S>, BufDnsStreamHandle) {
     let (message_sender, outbound_messages) = BufDnsStreamHandle::new(peer_addr);
     let stream = TcpStream::from_stream_with_receiver(stream, peer_addr, outbound_messages);
     (stream, message_sender)
@@ -79,10 +66,7 @@ pub fn tls_connect<P: RuntimeProvider>(
     client_config: Arc<ClientConfig>,
     provider: P,
 ) -> (
-    BoxFuture<
-        'static,
-        Result<TlsStream<AsyncIoTokioAsStd<TokioTlsClientStream<P::Tcp>>>, io::Error>,
-    >,
+    BoxFuture<'static, Result<TcpStream<P::Tls>, io::Error>>,
     BufDnsStreamHandle,
 ) {
     tls_connect_with_bind_addr(name_server, None, server_name, client_config, provider)
@@ -103,26 +87,25 @@ pub fn tls_connect_with_bind_addr<P: RuntimeProvider>(
     client_config: Arc<ClientConfig>,
     provider: P,
 ) -> (
-    BoxFuture<
-        'static,
-        Result<TlsStream<AsyncIoTokioAsStd<TokioTlsClientStream<P::Tcp>>>, io::Error>,
-    >,
+    BoxFuture<'static, Result<TcpStream<P::Tls>, io::Error>>,
     BufDnsStreamHandle,
 ) {
     let (message_sender, outbound_messages) = BufDnsStreamHandle::new(name_server);
-    let early_data_enabled = client_config.enable_early_data;
-    let tls_connector = TlsConnector::from(client_config).early_data(early_data_enabled);
 
     // This set of futures collapses the next tcp socket into a stream which can be used for
     //  sending and receiving tcp packets.
-    let stream = Box::pin(connect_tls(
-        tls_connector,
-        name_server,
-        bind_addr,
-        server_name,
-        outbound_messages,
-        provider,
-    ));
+    let stream = Box::pin(async move {
+        let tcp_stream = provider.connect_tcp(name_server, bind_addr, None).await?;
+        let tls_stream = provider
+            .connect_tls(tcp_stream, server_name, client_config)
+            .await?;
+
+        Ok(TcpStream::from_stream_with_receiver(
+            tls_stream,
+            name_server,
+            outbound_messages,
+        ))
+    });
 
     (stream, message_sender)
 }
@@ -135,82 +118,33 @@ pub fn tls_connect_with_bind_addr<P: RuntimeProvider>(
 /// * `bind_addr` - IP and port to connect from
 /// * `dns_name` - The DNS name associated with a certificate
 #[allow(clippy::type_complexity)]
-pub fn tls_connect_with_future<S, F>(
+pub fn tls_connect_with_future<P: RuntimeProvider, F>(
     future: F,
     name_server: SocketAddr,
     server_name: ServerName<'static>,
     client_config: Arc<ClientConfig>,
+    provider: P,
 ) -> (
-    BoxFuture<'static, Result<TlsStream<AsyncIoTokioAsStd<TokioTlsClientStream<S>>>, io::Error>>,
+    BoxFuture<'static, Result<TcpStream<P::Tls>, io::Error>>,
     BufDnsStreamHandle,
 )
 where
-    S: DnsTcpStream,
-    F: Future<Output = io::Result<S>> + Send + Unpin + 'static,
+    F: Future<Output = io::Result<P::Tcp>> + Send + 'static,
 {
     let (message_sender, outbound_messages) = BufDnsStreamHandle::new(name_server);
-    let early_data_enabled = client_config.enable_early_data;
-    let tls_connector = TlsConnector::from(client_config).early_data(early_data_enabled);
 
-    // This set of futures collapses the next tcp socket into a stream which can be used for
-    //  sending and receiving tcp packets.
-    let stream = Box::pin(connect_tls_with_future(
-        tls_connector,
-        future,
-        name_server,
-        server_name,
-        outbound_messages,
-    ));
+    let stream = Box::pin(async move {
+        let tcp_stream = future.await?;
+        let tls_stream = provider
+            .connect_tls(tcp_stream, server_name, client_config)
+            .await?;
+
+        Ok(TcpStream::from_stream_with_receiver(
+            tls_stream,
+            name_server,
+            outbound_messages,
+        ))
+    });
 
     (stream, message_sender)
-}
-
-async fn connect_tls<P: RuntimeProvider>(
-    tls_connector: TlsConnector,
-    name_server: SocketAddr,
-    bind_addr: Option<SocketAddr>,
-    server_name: ServerName<'static>,
-    outbound_messages: StreamReceiver,
-    provider: P,
-) -> io::Result<TcpStream<AsyncIoTokioAsStd<TokioTlsClientStream<P::Tcp>>>> {
-    let tcp = provider.connect_tcp(name_server, bind_addr, None);
-    connect_tls_with_future(
-        tls_connector,
-        tcp,
-        name_server,
-        server_name,
-        outbound_messages,
-    )
-    .await
-}
-
-async fn connect_tls_with_future<S: DnsTcpStream>(
-    tls_connector: TlsConnector,
-    future: impl Future<Output = io::Result<S>> + Send + Unpin,
-    name_server: SocketAddr,
-    server_name: ServerName<'static>,
-    outbound_messages: StreamReceiver,
-) -> io::Result<TcpStream<AsyncIoTokioAsStd<TokioTlsClientStream<S>>>> {
-    let stream = AsyncIoStdAsTokio(future.await?);
-    let s = match timeout(CONNECT_TIMEOUT, tls_connector.connect(server_name, stream)).await {
-        Ok(Ok(s)) => s,
-        Ok(Err(e)) => {
-            return Err(io::Error::new(
-                io::ErrorKind::ConnectionRefused,
-                format!("tls error: {e}"),
-            ));
-        }
-        Err(_) => {
-            return Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                format!("TLS handshake timed out after {CONNECT_TIMEOUT:?}"),
-            ));
-        }
-    };
-
-    Ok(TcpStream::from_stream_with_receiver(
-        AsyncIoTokioAsStd(s),
-        name_server,
-        outbound_messages,
-    ))
 }

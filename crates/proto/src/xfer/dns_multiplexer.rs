@@ -421,7 +421,7 @@ where
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "tokio"))]
 mod test {
     use alloc::{boxed::Box, vec::Vec};
     use core::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
