@@ -628,11 +628,9 @@ async fn h3(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
     config.alpn_protocols.push(alpn);
 
     let (client, bg) = Client::<TokioRuntimeProvider>::connect(
-        H3ClientStream::builder().crypto_config(config).build(
-            nameserver,
-            Arc::from(dns_name),
-            Arc::from(http_endpoint),
-        ),
+        H3ClientStream::builder(TokioRuntimeProvider::new())
+            .crypto_config(config)
+            .build(nameserver, Arc::from(dns_name), Arc::from(http_endpoint)),
     )
     .await?;
 

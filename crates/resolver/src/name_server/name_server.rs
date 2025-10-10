@@ -489,9 +489,9 @@ mod tests {
     use std::str::FromStr;
     use std::time::Duration;
 
+    use hickory_proto::runtime::{RuntimeProvider, Spawn};
     use test_support::subscribe;
     use tokio::net::UdpSocket;
-    use tokio::spawn;
 
     use super::*;
     use crate::config::{ConnectionConfig, ProtocolConfig};
@@ -574,7 +574,8 @@ mod tests {
         let name = Name::from_str("dead.beef.").unwrap();
         let data = b"DEADBEEF";
 
-        spawn({
+        let mut handle = provider.create_handle();
+        handle.spawn({
             let name = name.clone();
             async move {
                 let mut buffer = [0_u8; 512];
