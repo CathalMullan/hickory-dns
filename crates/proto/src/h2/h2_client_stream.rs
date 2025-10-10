@@ -27,7 +27,6 @@ use h2::client::{Connection, SendRequest};
 use http::header::{self, CONTENT_LENGTH};
 use rustls::ClientConfig;
 use rustls::pki_types::ServerName;
-use tokio::time::{error, timeout};
 use tokio_rustls::{TlsConnector, client::TlsStream as TokioTlsClientStream};
 use tracing::{debug, warn};
 
@@ -35,7 +34,7 @@ use crate::error::ProtoError;
 use crate::http::Version;
 use crate::op::{DnsRequest, DnsResponse};
 use crate::runtime::iocompat::AsyncIoStdAsTokio;
-use crate::runtime::{RuntimeProvider, Spawn};
+use crate::runtime::{RuntimeProvider, Spawn, Time};
 use crate::xfer::{CONNECT_TIMEOUT, DnsRequestSender, DnsResponseStream};
 
 const ALPN_H2: &[u8] = b"h2";
@@ -416,10 +415,7 @@ enum HttpsClientConnectState<P: RuntimeProvider> {
         // TODO: also abstract away Tokio TLS in RuntimeProvider.
         tls: BoxFuture<
             'static,
-            Result<
-                Result<TokioTlsClientStream<AsyncIoStdAsTokio<P::Tcp>>, io::Error>,
-                error::Elapsed,
-            >,
+            Result<Result<TokioTlsClientStream<AsyncIoStdAsTokio<P::Tcp>>, io::Error>, io::Error>,
         >,
         name_server_name: Arc<str>,
         name_server: SocketAddr,
@@ -471,7 +467,7 @@ impl<P: RuntimeProvider> Future for HttpsClientConnectState<P> {
                         Ok(dns_name) => Self::TlsConnecting {
                             name_server_name,
                             name_server: *name_server,
-                            tls: Box::pin(timeout(
+                            tls: Box::pin(P::Timer::timeout(
                                 CONNECT_TIMEOUT,
                                 TlsConnector::from(tls.client_config)
                                     .connect(dns_name.to_owned(), AsyncIoStdAsTokio(tcp)),
