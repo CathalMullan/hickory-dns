@@ -12,8 +12,6 @@ use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
-#[cfg(any(test, feature = "tokio"))]
-use tokio::runtime::Runtime;
 
 use crate::error::ProtoError;
 use crate::tcp::DnsTcpStream;
@@ -114,14 +112,25 @@ mod tokio_runtime {
     use std::sync::Mutex;
 
     #[cfg(feature = "__quic")]
-    use quinn::Runtime;
+    use quinn::Runtime as _;
     use tokio::net::{TcpSocket, TcpStream, UdpSocket as TokioUdpSocket};
+    use tokio::runtime::Runtime;
     use tokio::task::JoinSet;
     use tokio::time::timeout;
 
     use super::iocompat::AsyncIoTokioAsStd;
     use super::*;
     use crate::xfer::CONNECT_TIMEOUT;
+
+    impl Executor for Runtime {
+        fn new() -> Self {
+            Self::new().expect("failed to create tokio runtime")
+        }
+
+        fn block_on<F: Future>(&mut self, future: F) -> F::Output {
+            Self::block_on(self, future)
+        }
+    }
 
     /// A handle to the Tokio runtime
     #[derive(Clone, Default)]
@@ -232,10 +241,32 @@ mod tokio_runtime {
             quinn::TokioRuntime.wrap_udp_socket(socket)
         }
     }
+
+    /// New type which is implemented using tokio::time::{Delay, Timeout}
+    #[derive(Clone, Copy, Debug)]
+    pub struct TokioTime;
+
+    #[async_trait]
+    impl Time for TokioTime {
+        async fn delay_for(duration: Duration) {
+            tokio::time::sleep(duration).await
+        }
+
+        async fn timeout<F: 'static + Future + Send>(
+            duration: Duration,
+            future: F,
+        ) -> Result<F::Output, std::io::Error> {
+            tokio::time::timeout(duration, future)
+                .await
+                .map_err(move |_| {
+                    std::io::Error::new(std::io::ErrorKind::TimedOut, "future timed out")
+                })
+        }
+    }
 }
 
 #[cfg(feature = "tokio")]
-pub use tokio_runtime::{TokioHandle, TokioRuntimeProvider};
+pub use tokio_runtime::{TokioHandle, TokioRuntimeProvider, TokioTime};
 
 /// RuntimeProvider defines which async runtime that handles IO and timers.
 pub trait RuntimeProvider: Clone + Send + Sync + Unpin + 'static {
@@ -323,17 +354,6 @@ pub trait Executor {
     fn block_on<F: Future>(&mut self, future: F) -> F::Output;
 }
 
-#[cfg(feature = "tokio")]
-impl Executor for Runtime {
-    fn new() -> Self {
-        Self::new().expect("failed to create tokio runtime")
-    }
-
-    fn block_on<F: Future>(&mut self, future: F) -> F::Output {
-        Self::block_on(self, future)
-    }
-}
-
 /// Generic Time for Delay and Timeout.
 // This trait is created to allow to use different types of time systems. It's used in Fuchsia OS, please be mindful when update it.
 #[async_trait]
@@ -356,27 +376,5 @@ pub trait Time {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs()
-    }
-}
-
-/// New type which is implemented using tokio::time::{Delay, Timeout}
-#[cfg(any(test, feature = "tokio"))]
-#[derive(Clone, Copy, Debug)]
-pub struct TokioTime;
-
-#[cfg(any(test, feature = "tokio"))]
-#[async_trait]
-impl Time for TokioTime {
-    async fn delay_for(duration: Duration) {
-        tokio::time::sleep(duration).await
-    }
-
-    async fn timeout<F: 'static + Future + Send>(
-        duration: Duration,
-        future: F,
-    ) -> Result<F::Output, std::io::Error> {
-        tokio::time::timeout(duration, future)
-            .await
-            .map_err(move |_| std::io::Error::new(std::io::ErrorKind::TimedOut, "future timed out"))
     }
 }
