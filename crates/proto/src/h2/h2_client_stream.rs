@@ -413,10 +413,7 @@ enum HttpsClientConnectState<P: RuntimeProvider> {
     },
     TlsConnecting {
         // TODO: also abstract away Tokio TLS in RuntimeProvider.
-        tls: BoxFuture<
-            'static,
-            Result<Result<TokioTlsClientStream<AsyncIoStdAsTokio<P::Tcp>>, io::Error>, io::Error>,
-        >,
+        tls: BoxFuture<'static, Result<TokioTlsClientStream<AsyncIoStdAsTokio<P::Tcp>>, io::Error>>,
         name_server_name: Arc<str>,
         name_server: SocketAddr,
         query_path: Arc<str>,
@@ -464,17 +461,28 @@ impl<P: RuntimeProvider> Future for HttpsClientConnectState<P> {
                     let query_path = tls.path.clone();
 
                     match ServerName::try_from(&*tls.server_name) {
-                        Ok(dns_name) => Self::TlsConnecting {
-                            name_server_name,
-                            name_server: *name_server,
-                            tls: Box::pin(P::Timer::timeout(
-                                CONNECT_TIMEOUT,
-                                TlsConnector::from(tls.client_config)
-                                    .connect(dns_name.to_owned(), AsyncIoStdAsTokio(tcp)),
-                            )),
-                            query_path,
-                            provider: provider.clone(),
-                        },
+                        Ok(dns_name) => {
+                            let future = TlsConnector::from(tls.client_config)
+                                .connect(dns_name.to_owned(), AsyncIoStdAsTokio(tcp));
+
+                            Self::TlsConnecting {
+                                name_server_name,
+                                name_server: *name_server,
+                                tls: Box::pin(async move {
+                                    P::Timer::timeout(
+                                    CONNECT_TIMEOUT,
+                                    future,
+                                )
+                                .await
+                                .map_err(|_| io::Error::new(
+                                    io::ErrorKind::TimedOut,
+                                    format!("TLS handshake timed out after {CONNECT_TIMEOUT:?}"),
+                                ))?
+                                }),
+                                query_path,
+                                provider: provider.clone(),
+                            }
+                        }
                         Err(err) => Self::Errored(Some(io::Error::new(
                             io::ErrorKind::InvalidData,
                             format!("bad server name {:?}: {err}", &tls.server_name),
@@ -488,17 +496,7 @@ impl<P: RuntimeProvider> Future for HttpsClientConnectState<P> {
                     tls,
                     provider,
                 } => {
-                    let res = match ready!(tls.poll_unpin(cx)) {
-                        Ok(res) => res,
-                        Err(_) => {
-                            return Poll::Ready(Err(io::Error::new(
-                                io::ErrorKind::TimedOut,
-                                format!("TLS handshake timed out after {CONNECT_TIMEOUT:?}"),
-                            )));
-                        }
-                    };
-
-                    let tls = res?;
+                    let tls = ready!(tls.poll_unpin(cx))?;
                     debug!("tls connection established to: {}", name_server);
                     let mut handshake = h2::client::Builder::new();
                     handshake.enable_push(false);
