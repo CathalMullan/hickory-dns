@@ -14,21 +14,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use async_trait::async_trait;
 #[cfg(any(test, feature = "tokio"))]
 use tokio::runtime::Runtime;
-#[cfg(any(test, feature = "tokio"))]
-use tokio::task::JoinHandle;
 
 use crate::error::ProtoError;
 use crate::tcp::DnsTcpStream;
 use crate::udp::DnsUdpSocket;
-
-/// Spawn a background task, if it was present
-#[cfg(any(test, feature = "tokio"))]
-pub fn spawn_bg<F: Future<Output = R> + Send + 'static, R: Send + 'static>(
-    runtime: &Runtime,
-    background: F,
-) -> JoinHandle<R> {
-    runtime.spawn(background)
-}
 
 #[cfg(feature = "tokio")]
 #[doc(hidden)]
