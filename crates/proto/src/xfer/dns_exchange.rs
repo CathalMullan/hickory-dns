@@ -53,9 +53,9 @@ pub enum Connecting<P: RuntimeProvider> {
         DnsExchangeConnect<
             DnsMultiplexerConnect<
                 BoxFuture<'static, Result<TcpClientStream<P::Tcp>, io::Error>>,
-                TcpClientStream<<P as RuntimeProvider>::Tcp>,
+                TcpClientStream<P::Tcp>,
             >,
-            DnsMultiplexer<TcpClientStream<<P as RuntimeProvider>::Tcp>>,
+            DnsMultiplexer<TcpClientStream<P::Tcp>>,
             P,
         >,
     ),
@@ -63,10 +63,10 @@ pub enum Connecting<P: RuntimeProvider> {
     Tls(
         DnsExchangeConnect<
             DnsMultiplexerConnect<
-                BoxFuture<'static, Result<TlsClientStream<<P as RuntimeProvider>::Tcp>, io::Error>>,
-                TlsClientStream<<P as RuntimeProvider>::Tcp>,
+                BoxFuture<'static, Result<TlsClientStream<P::Tls>, io::Error>>,
+                TlsClientStream<P::Tls>,
             >,
-            DnsMultiplexer<TlsClientStream<<P as RuntimeProvider>::Tcp>>,
+            DnsMultiplexer<TlsClientStream<P::Tls>>,
             P,
         >,
     ),
