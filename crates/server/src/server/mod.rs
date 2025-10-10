@@ -279,7 +279,22 @@ impl<T: RequestHandler> Server<T> {
         server_cert_resolver: Arc<dyn ResolvesServerCert>,
         dns_hostname: Option<String>,
     ) -> io::Result<()> {
+        use hickory_proto::runtime::RuntimeProvider;
+
         let cx = self.context.clone();
+
+        let provider = TokioRuntimeProvider::new();
+        let bind_addr = socket.local_addr()?;
+        let socket = provider
+            .quic_binder()
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "QUIC is not supported by this runtime provider",
+                )
+            })?
+            .bind_quic(bind_addr, bind_addr)?;
+
         self.join_set.spawn(quic_handler::handle_quic(
             socket,
             server_cert_resolver,
@@ -316,7 +331,21 @@ impl<T: RequestHandler> Server<T> {
         tls_config: Arc<ServerConfig>,
         dns_hostname: Option<String>,
     ) -> io::Result<()> {
+        use hickory_proto::runtime::RuntimeProvider;
+
         let cx = self.context.clone();
+
+        let provider = TokioRuntimeProvider::new();
+        let bind_addr = socket.local_addr()?;
+        let socket = provider
+            .quic_binder()
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "QUIC is not supported by this runtime provider",
+                )
+            })?
+            .bind_quic(bind_addr, bind_addr)?;
 
         self.join_set.spawn(quic_handler::handle_quic_with_server(
             QuicServer::with_socket_and_tls_config(socket, tls_config)?,

@@ -74,6 +74,7 @@ async fn test_quic_stream() {
 
     // All testing is only done on local addresses, construct the server
     let quic_ns = QuicServer::new(
+        TokioRuntimeProvider::new(),
         SocketAddr::from(([127, 0, 0, 1], 0)),
         Arc::new(certificate_and_key),
     )
