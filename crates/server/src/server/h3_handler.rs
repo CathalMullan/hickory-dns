@@ -10,9 +10,9 @@ use std::{io, net::SocketAddr, sync::Arc};
 use bytes::{Buf, Bytes};
 use futures_util::lock::Mutex;
 use h3::server::RequestStream;
-use h3_quinn::BidiStream;
+use h3_quinn::{BidiStream, quinn};
 use rustls::server::ResolvesServerCert;
-use tokio::{net, task::JoinSet};
+use tokio::task::JoinSet;
 use tracing::{debug, error, warn};
 
 use super::{
@@ -36,7 +36,7 @@ use crate::{
 };
 
 pub(super) async fn handle_h3(
-    socket: net::UdpSocket,
+    socket: Arc<dyn quinn::AsyncUdpSocket>,
     server_cert_resolver: Arc<dyn ResolvesServerCert>,
     dns_hostname: Option<String>,
     cx: Arc<ServerContext<impl RequestHandler>>,

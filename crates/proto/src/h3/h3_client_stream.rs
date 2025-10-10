@@ -34,7 +34,6 @@ use crate::op::{DnsRequest, DnsResponse};
 use crate::quic::connect_quic;
 use crate::runtime::{RuntimeProvider, Spawn};
 use crate::rustls::client_config;
-use crate::udp::UdpSocket;
 use crate::xfer::{DnsRequestSender, DnsResponseStream};
 
 use super::ALPN_H3;
@@ -379,15 +378,26 @@ impl<P: RuntimeProvider> H3ClientStreamBuilder<P> {
         server_name: Arc<str>,
         path: Arc<str>,
     ) -> Result<H3ClientStream, io::Error> {
-        let connect = if let Some(bind_addr) = self.bind_addr {
-            <tokio::net::UdpSocket as UdpSocket>::connect_with_bind(name_server, bind_addr)
-        } else {
-            <tokio::net::UdpSocket as UdpSocket>::connect(name_server)
-        };
+        let bind_addr = self.bind_addr.unwrap_or_else(|| {
+            if name_server.is_ipv4() {
+                "0.0.0.0:0".parse().unwrap()
+            } else {
+                "[::]:0".parse().unwrap()
+            }
+        });
 
-        let socket = connect.await?;
-        let socket = socket.into_std()?;
-        let endpoint = Endpoint::new(
+        let socket = self
+            .provider
+            .quic_binder()
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "QUIC is not supported by this runtime provider",
+                )
+            })?
+            .bind_quic(bind_addr, name_server)?;
+
+        let endpoint = Endpoint::new_with_abstract_socket(
             EndpointConfig::default(),
             None,
             socket,
