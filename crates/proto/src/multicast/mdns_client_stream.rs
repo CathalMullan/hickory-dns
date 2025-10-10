@@ -28,9 +28,7 @@ use crate::xfer::DnsClientStream;
 /// A UDP client stream of DNS binary packets
 #[must_use = "futures do nothing unless polled"]
 pub struct MdnsClientStream<P: RuntimeProvider> {
-    mdns_stream: MdnsStream,
-    #[expect(unused)]
-    provider: P,
+    mdns_stream: MdnsStream<P>,
 }
 
 impl<P: RuntimeProvider> MdnsClientStream<P> {
@@ -85,13 +83,18 @@ impl<P: RuntimeProvider> MdnsClientStream<P> {
         ipv6_if: Option<u32>,
         provider: P,
     ) -> (MdnsClientConnect<P>, BufDnsStreamHandle) {
-        let (stream_future, sender) =
-            MdnsStream::new(mdns_addr, mdns_query_type, packet_ttl, ipv4_if, ipv6_if);
+        let (stream_future, sender) = MdnsStream::new(
+            mdns_addr,
+            mdns_query_type,
+            packet_ttl,
+            ipv4_if,
+            ipv6_if,
+            provider,
+        );
 
         let new_future = Box::pin(async {
             Ok(Self {
                 mdns_stream: stream_future.await?,
-                provider,
             })
         });
         let new_future = MdnsClientConnect(new_future);
