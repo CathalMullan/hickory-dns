@@ -27,7 +27,6 @@ use h2::client::{Connection, SendRequest};
 use http::header::{self, CONTENT_LENGTH};
 use rustls::ClientConfig;
 use rustls::pki_types::ServerName;
-use tokio_rustls::{TlsConnector, client::TlsStream as TokioTlsClientStream};
 use tracing::{debug, warn};
 
 use crate::error::ProtoError;
@@ -412,8 +411,7 @@ enum HttpsClientConnectState<P: RuntimeProvider> {
         provider: P,
     },
     TlsConnecting {
-        // TODO: also abstract away Tokio TLS in RuntimeProvider.
-        tls: BoxFuture<'static, Result<TokioTlsClientStream<AsyncIoStdAsTokio<P::Tcp>>, io::Error>>,
+        tls: BoxFuture<'static, Result<AsyncIoStdAsTokio<P::Tls>, io::Error>>,
         name_server_name: Arc<str>,
         name_server: SocketAddr,
         query_path: Arc<str>,
@@ -425,7 +423,7 @@ enum HttpsClientConnectState<P: RuntimeProvider> {
             Result<
                 (
                     SendRequest<Bytes>,
-                    Connection<TokioTlsClientStream<AsyncIoStdAsTokio<P::Tcp>>, Bytes>,
+                    Connection<AsyncIoStdAsTokio<P::Tls>, Bytes>,
                 ),
                 h2::Error,
             >,
@@ -462,22 +460,21 @@ impl<P: RuntimeProvider> Future for HttpsClientConnectState<P> {
 
                     match ServerName::try_from(&*tls.server_name) {
                         Ok(dns_name) => {
-                            let future = TlsConnector::from(tls.client_config)
-                                .connect(dns_name.to_owned(), AsyncIoStdAsTokio(tcp));
+                            let future =
+                                provider.connect_tls(tcp, dns_name.to_owned(), tls.client_config);
 
                             Self::TlsConnecting {
                                 name_server_name,
                                 name_server: *name_server,
                                 tls: Box::pin(async move {
-                                    P::Timer::timeout(
-                                    CONNECT_TIMEOUT,
-                                    future,
-                                )
-                                .await
-                                .map_err(|_| io::Error::new(
-                                    io::ErrorKind::TimedOut,
-                                    format!("TLS handshake timed out after {CONNECT_TIMEOUT:?}"),
-                                ))?
+                                    let tls_stream = P::Timer::timeout(CONNECT_TIMEOUT, future)
+                                        .await
+                                        .map_err(|_| io::Error::new(
+                                            io::ErrorKind::TimedOut,
+                                            format!("TLS handshake timed out after {CONNECT_TIMEOUT:?}"),
+                                        ))??;
+
+                                    Ok(AsyncIoStdAsTokio(tls_stream))
                                 }),
                                 query_path,
                                 provider: provider.clone(),
