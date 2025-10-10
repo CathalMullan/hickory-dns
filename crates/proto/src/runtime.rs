@@ -130,7 +130,7 @@ mod tokio_runtime {
     }
 
     impl Spawn for TokioHandle {
-        fn spawn_bg<F>(&mut self, future: F)
+        fn spawn_tracked<F>(&mut self, future: F)
         where
             F: Future<Output = Result<(), ProtoError>> + Send + 'static,
         {
@@ -289,8 +289,10 @@ pub trait QuicSocketBinder {
 
 /// A type defines the Handle which can spawn future.
 pub trait Spawn {
-    /// Spawn a future in the background
-    fn spawn_bg<F>(&mut self, future: F)
+    /// Spawn a tracked future in the background.
+    ///
+    /// This method should periodically reap completed tasks, in order to prevent unbounded memory growth.
+    fn spawn_tracked<F>(&mut self, future: F)
     where
         F: Future<Output = Result<(), ProtoError>> + Send + 'static;
 }

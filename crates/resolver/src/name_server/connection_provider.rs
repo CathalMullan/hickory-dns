@@ -74,36 +74,36 @@ impl<P: RuntimeProvider> Future for ConnectionFuture<P> {
         Poll::Ready(Ok(match &mut self.connect {
             Connecting::Udp(conn) => {
                 let (conn, bg) = ready!(conn.poll_unpin(cx))?;
-                self.spawner.spawn_bg(bg);
+                self.spawner.spawn_tracked(bg);
                 conn
             }
             Connecting::Tcp(conn) => {
                 let (conn, bg) = ready!(conn.poll_unpin(cx))?;
-                self.spawner.spawn_bg(bg);
+                self.spawner.spawn_tracked(bg);
                 conn
             }
             #[cfg(feature = "__tls")]
             Connecting::Tls(conn) => {
                 let (conn, bg) = ready!(conn.poll_unpin(cx))?;
-                self.spawner.spawn_bg(bg);
+                self.spawner.spawn_tracked(bg);
                 conn
             }
             #[cfg(feature = "__https")]
             Connecting::Https(conn) => {
                 let (conn, bg) = ready!(conn.poll_unpin(cx))?;
-                self.spawner.spawn_bg(bg);
+                self.spawner.spawn_tracked(bg);
                 conn
             }
             #[cfg(feature = "__quic")]
             Connecting::Quic(conn) => {
                 let (conn, bg) = ready!(conn.poll_unpin(cx))?;
-                self.spawner.spawn_bg(bg);
+                self.spawner.spawn_tracked(bg);
                 conn
             }
             #[cfg(feature = "__h3")]
             Connecting::H3(conn) => {
                 let (conn, bg) = ready!(conn.poll_unpin(cx))?;
-                self.spawner.spawn_bg(bg);
+                self.spawner.spawn_tracked(bg);
                 conn
             }
             _ => unreachable!("unsupported connection type in Connecting"),
