@@ -15,6 +15,7 @@ use rustls::server::ResolvesServerCert;
 use rustls::server::ServerConfig as TlsServerConfig;
 use rustls::version::TLS13;
 
+use crate::quic::quic_runtime::QuinnRuntimeAdapter;
 use crate::runtime::RuntimeProvider;
 use crate::{error::ProtoError, rustls::default_provider};
 
@@ -41,11 +42,12 @@ impl QuicServer {
             .ok_or_else(|| ProtoError::from("QUIC not supported by runtime"))?
             .bind_quic(name_server, name_server)?;
 
-        Self::with_socket(socket, server_cert_resolver)
+        Self::with_socket(provider, socket, server_cert_resolver)
     }
 
     /// Construct the new server with an existing socket and a default TLS configuration
-    pub fn with_socket(
+    pub fn with_socket<P: RuntimeProvider>(
+        provider: P,
         socket: Arc<dyn quinn::AsyncUdpSocket>,
         server_cert_resolver: Arc<dyn ResolvesServerCert>,
     ) -> Result<Self, ProtoError> {
@@ -57,13 +59,14 @@ impl QuicServer {
 
         config.alpn_protocols = vec![quic_stream::DOQ_ALPN.to_vec()];
 
-        Self::with_socket_and_tls_config(socket, Arc::new(config))
+        Self::with_socket_and_tls_config(provider, socket, Arc::new(config))
     }
 
     /// Construct the new server with an existing socket and a custom TLS configuration
     ///
     /// The caller must ensure the `TlsServerConfig` has the appropriate DoQ ALPN protocol enabled.
-    pub fn with_socket_and_tls_config(
+    pub fn with_socket_and_tls_config<P: RuntimeProvider>(
+        provider: P,
         socket: Arc<dyn quinn::AsyncUdpSocket>,
         tls_config: Arc<TlsServerConfig>,
     ) -> Result<Self, ProtoError> {
@@ -76,7 +79,7 @@ impl QuicServer {
             endpoint_config,
             Some(server_config),
             socket,
-            Arc::new(quinn::TokioRuntime),
+            Arc::new(QuinnRuntimeAdapter::new(provider.clone())),
         )?;
 
         Ok(Self { endpoint })

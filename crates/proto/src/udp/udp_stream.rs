@@ -50,6 +50,9 @@ where
         poll_fn(|cx| self.poll_recv_from(cx, buf)).await
     }
 
+    /// Poll for write readiness
+    fn poll_send_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>>;
+
     /// Poll once to send data to the given address.
     fn poll_send_to(
         &self,
@@ -389,6 +392,10 @@ impl DnsUdpSocket for tokio::net::UdpSocket {
         let len = buf.filled().len();
 
         Poll::Ready(Ok((len, addr)))
+    }
+
+    fn poll_send_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Self::poll_send_ready(self, cx)
     }
 
     fn poll_send_to(

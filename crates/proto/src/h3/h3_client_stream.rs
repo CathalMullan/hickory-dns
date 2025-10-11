@@ -32,6 +32,7 @@ use crate::error::ProtoError;
 use crate::http::Version;
 use crate::op::{DnsRequest, DnsResponse};
 use crate::quic::connect_quic;
+use crate::quic::quic_runtime::QuinnRuntimeAdapter;
 use crate::runtime::{RuntimeProvider, Spawn};
 use crate::rustls::client_config;
 use crate::xfer::{DnsRequestSender, DnsResponseStream};
@@ -366,7 +367,7 @@ impl<P: RuntimeProvider> H3ClientStreamBuilder<P> {
             EndpointConfig::default(),
             None,
             socket,
-            Arc::new(quinn::TokioRuntime),
+            Arc::new(QuinnRuntimeAdapter::new(self.provider.clone())),
         )?;
         self.connect_inner(endpoint, name_server, server_name, path)
             .await
@@ -401,7 +402,7 @@ impl<P: RuntimeProvider> H3ClientStreamBuilder<P> {
             EndpointConfig::default(),
             None,
             socket,
-            Arc::new(quinn::TokioRuntime),
+            Arc::new(QuinnRuntimeAdapter::new(self.provider.clone())),
         )?;
         self.connect_inner(endpoint, name_server, server_name, path)
             .await

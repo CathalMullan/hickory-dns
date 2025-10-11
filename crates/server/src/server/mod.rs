@@ -296,6 +296,7 @@ impl<T: RequestHandler> Server<T> {
             .bind_quic(bind_addr, bind_addr)?;
 
         self.join_set.spawn(quic_handler::handle_quic(
+            provider,
             socket,
             server_cert_resolver,
             dns_hostname,
@@ -348,7 +349,7 @@ impl<T: RequestHandler> Server<T> {
             .bind_quic(bind_addr, bind_addr)?;
 
         self.join_set.spawn(quic_handler::handle_quic_with_server(
-            QuicServer::with_socket_and_tls_config(socket, tls_config)?,
+            QuicServer::with_socket_and_tls_config(provider, socket, tls_config)?,
             dns_hostname,
             cx,
         ));
@@ -392,6 +393,7 @@ impl<T: RequestHandler> Server<T> {
             .bind_quic(bind_addr, bind_addr)?;
 
         self.join_set.spawn(h3_handler::handle_h3(
+            provider,
             socket,
             server_cert_resolver,
             dns_hostname,
@@ -441,7 +443,7 @@ impl<T: RequestHandler> Server<T> {
             .bind_quic(bind_addr, bind_addr)?;
 
         self.join_set.spawn(h3_handler::handle_h3_with_server(
-            H3Server::with_socket_and_tls_config(socket, tls_config)?,
+            H3Server::with_socket_and_tls_config(provider, socket, tls_config)?,
             dns_hostname,
             self.context.clone(),
         ));

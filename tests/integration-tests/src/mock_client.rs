@@ -84,6 +84,10 @@ impl DnsUdpSocket for UdpPlaceholder {
         )))
     }
 
+    fn poll_send_ready(&self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+
     fn poll_send_to(
         &self,
         _cx: &mut Context<'_>,

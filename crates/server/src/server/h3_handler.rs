@@ -11,6 +11,7 @@ use bytes::{Buf, Bytes};
 use futures_util::lock::Mutex;
 use h3::server::RequestStream;
 use h3_quinn::{BidiStream, quinn};
+use hickory_proto::runtime::RuntimeProvider;
 use rustls::server::ResolvesServerCert;
 use tokio::task::JoinSet;
 use tracing::{debug, error, warn};
@@ -35,7 +36,8 @@ use crate::{
     zone_handler::MessageResponse,
 };
 
-pub(super) async fn handle_h3(
+pub(super) async fn handle_h3<P: RuntimeProvider>(
+    provider: P,
     socket: Arc<dyn quinn::AsyncUdpSocket>,
     server_cert_resolver: Arc<dyn ResolvesServerCert>,
     dns_hostname: Option<String>,
@@ -43,7 +45,7 @@ pub(super) async fn handle_h3(
 ) -> Result<(), ProtoError> {
     debug!("registered h3: {:?}", socket);
     handle_h3_with_server(
-        H3Server::with_socket(socket, server_cert_resolver)?,
+        H3Server::with_socket(provider, socket, server_cert_resolver)?,
         dns_hostname,
         cx,
     )

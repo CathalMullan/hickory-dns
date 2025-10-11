@@ -321,6 +321,10 @@ impl DnsUdpSocket for MockUdpSocket {
         Poll::Ready(Ok((encoded.len(), socket_addr)))
     }
 
+    fn poll_send_ready(&self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+
     fn poll_send_to(
         &self,
         _cx: &mut Context<'_>,

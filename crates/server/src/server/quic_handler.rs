@@ -10,6 +10,7 @@ use std::{io, net::SocketAddr, sync::Arc};
 use bytes::Bytes;
 use futures_util::lock::Mutex;
 use h3_quinn::quinn;
+use hickory_proto::runtime::RuntimeProvider;
 use rustls::server::ResolvesServerCert;
 use tokio::task::JoinSet;
 use tracing::{debug, error, warn};
@@ -30,7 +31,8 @@ use crate::{
     zone_handler::MessageResponse,
 };
 
-pub(super) async fn handle_quic(
+pub(super) async fn handle_quic<P: RuntimeProvider>(
+    provider: P,
     socket: Arc<dyn quinn::AsyncUdpSocket>,
     server_cert_resolver: Arc<dyn ResolvesServerCert>,
     dns_hostname: Option<String>,
@@ -38,7 +40,7 @@ pub(super) async fn handle_quic(
 ) -> Result<(), ProtoError> {
     debug!(?socket, "registered quic");
     handle_quic_with_server(
-        QuicServer::with_socket(socket, server_cert_resolver)?,
+        QuicServer::with_socket(provider, socket, server_cert_resolver)?,
         dns_hostname,
         cx,
     )
