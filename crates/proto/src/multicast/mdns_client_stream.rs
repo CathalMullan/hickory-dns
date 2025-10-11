@@ -8,6 +8,7 @@
 use alloc::boxed::Box;
 use core::fmt::{self, Display};
 use core::future::Future;
+use core::marker::PhantomData;
 use core::net::{Ipv4Addr, SocketAddr};
 use core::pin::Pin;
 use core::task::{Context, Poll};
@@ -22,22 +23,23 @@ use crate::error::ProtoError;
 use crate::multicast::mdns_stream::{MDNS_IPV4, MDNS_IPV6};
 use crate::multicast::{MdnsQueryType, MdnsStream};
 use crate::op::SerialMessage;
-use crate::runtime::TokioTime;
+use crate::runtime::RuntimeProvider;
 use crate::xfer::DnsClientStream;
 
 /// A UDP client stream of DNS binary packets
 #[must_use = "futures do nothing unless polled"]
-pub struct MdnsClientStream {
+pub struct MdnsClientStream<P: RuntimeProvider> {
     mdns_stream: MdnsStream,
+    _phantom: PhantomData<P>,
 }
 
-impl MdnsClientStream {
+impl<P: RuntimeProvider> MdnsClientStream<P> {
     /// associates the socket to the well-known ipv4 multicast address
     pub fn new_ipv4(
         mdns_query_type: MdnsQueryType,
         packet_ttl: Option<u32>,
         ipv4_if: Option<Ipv4Addr>,
-    ) -> (MdnsClientConnect, BufDnsStreamHandle) {
+    ) -> (MdnsClientConnect<P>, BufDnsStreamHandle) {
         Self::new(*MDNS_IPV4, mdns_query_type, packet_ttl, ipv4_if, None)
     }
 
@@ -46,7 +48,7 @@ impl MdnsClientStream {
         mdns_query_type: MdnsQueryType,
         packet_ttl: Option<u32>,
         ipv6_if: Option<u32>,
-    ) -> (MdnsClientConnect, BufDnsStreamHandle) {
+    ) -> (MdnsClientConnect<P>, BufDnsStreamHandle) {
         Self::new(*MDNS_IPV6, mdns_query_type, packet_ttl, None, ipv6_if)
     }
 
@@ -65,13 +67,14 @@ impl MdnsClientStream {
         packet_ttl: Option<u32>,
         ipv4_if: Option<Ipv4Addr>,
         ipv6_if: Option<u32>,
-    ) -> (MdnsClientConnect, BufDnsStreamHandle) {
+    ) -> (MdnsClientConnect<P>, BufDnsStreamHandle) {
         let (stream_future, sender) =
             MdnsStream::new(mdns_addr, mdns_query_type, packet_ttl, ipv4_if, ipv6_if);
 
         let new_future = Box::pin(async {
             Ok(Self {
                 mdns_stream: stream_future.await?,
+                _phantom: PhantomData,
             })
         });
         let new_future = MdnsClientConnect(new_future);
@@ -80,21 +83,21 @@ impl MdnsClientStream {
     }
 }
 
-impl Display for MdnsClientStream {
+impl<P: RuntimeProvider> Display for MdnsClientStream<P> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(formatter, "mDNS({})", self.mdns_stream.multicast_addr())
     }
 }
 
-impl DnsClientStream for MdnsClientStream {
-    type Time = TokioTime;
+impl<P: RuntimeProvider> DnsClientStream for MdnsClientStream<P> {
+    type Time = P::Timer;
 
     fn name_server_addr(&self) -> SocketAddr {
         self.mdns_stream.multicast_addr()
     }
 }
 
-impl Stream for MdnsClientStream {
+impl<P: RuntimeProvider> Stream for MdnsClientStream<P> {
     type Item = Result<SerialMessage, ProtoError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -112,10 +115,12 @@ impl Stream for MdnsClientStream {
 }
 
 /// A future that resolves to an MdnsClientStream
-pub struct MdnsClientConnect(BoxFuture<'static, Result<MdnsClientStream, ProtoError>>);
+pub struct MdnsClientConnect<P: RuntimeProvider>(
+    BoxFuture<'static, Result<MdnsClientStream<P>, ProtoError>>,
+);
 
-impl Future for MdnsClientConnect {
-    type Output = Result<MdnsClientStream, ProtoError>;
+impl<P: RuntimeProvider> Future for MdnsClientConnect<P> {
+    type Output = Result<MdnsClientStream<P>, ProtoError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.0.as_mut().poll(cx)

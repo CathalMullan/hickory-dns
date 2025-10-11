@@ -27,7 +27,6 @@ use h2::client::{Connection, SendRequest};
 use http::header::{self, CONTENT_LENGTH};
 use rustls::ClientConfig;
 use rustls::pki_types::ServerName;
-use tokio::time::{error, timeout};
 use tokio_rustls::{TlsConnector, client::TlsStream as TokioTlsClientStream};
 use tracing::{debug, warn};
 
@@ -35,7 +34,7 @@ use crate::error::ProtoError;
 use crate::http::Version;
 use crate::op::{DnsRequest, DnsResponse};
 use crate::runtime::iocompat::AsyncIoStdAsTokio;
-use crate::runtime::{RuntimeProvider, Spawn};
+use crate::runtime::{RuntimeProvider, Spawn, Time};
 use crate::xfer::{CONNECT_TIMEOUT, DnsRequestSender, DnsResponseStream};
 
 const ALPN_H2: &[u8] = b"h2";
@@ -415,13 +414,7 @@ enum HttpsClientConnectState<P: RuntimeProvider> {
     TlsConnecting {
         provider: P,
         // TODO: also abstract away Tokio TLS in RuntimeProvider.
-        tls: BoxFuture<
-            'static,
-            Result<
-                Result<TokioTlsClientStream<AsyncIoStdAsTokio<P::Tcp>>, io::Error>,
-                error::Elapsed,
-            >,
-        >,
+        tls: BoxFuture<'static, Result<TokioTlsClientStream<AsyncIoStdAsTokio<P::Tcp>>, io::Error>>,
         name_server_name: Arc<str>,
         name_server: SocketAddr,
         query_path: Arc<str>,
@@ -468,17 +461,26 @@ impl<P: RuntimeProvider> Future for HttpsClientConnectState<P> {
                     let query_path = tls.path.clone();
 
                     match ServerName::try_from(&*tls.server_name) {
-                        Ok(dns_name) => Self::TlsConnecting {
-                            provider: provider.clone(),
-                            name_server_name,
-                            name_server: *name_server,
-                            tls: Box::pin(timeout(
-                                CONNECT_TIMEOUT,
-                                TlsConnector::from(tls.client_config)
-                                    .connect(dns_name.to_owned(), AsyncIoStdAsTokio(tcp)),
-                            )),
-                            query_path,
-                        },
+                        Ok(dns_name) => {
+                            let tls_connector = TlsConnector::from(tls.client_config);
+                            let future =
+                                tls_connector.connect(dns_name.to_owned(), AsyncIoStdAsTokio(tcp));
+
+                            Self::TlsConnecting {
+                                name_server_name,
+                                name_server: *name_server,
+                                tls: Box::pin(async move {
+                                    P::Timer::timeout(CONNECT_TIMEOUT, future)
+                                        .await
+                                        .map_err(|_| io::Error::new(
+                                            io::ErrorKind::TimedOut,
+                                            format!("TLS handshake timed out after {CONNECT_TIMEOUT:?}"),
+                                        ))?
+                                }),
+                                query_path,
+                                provider: provider.clone(),
+                            }
+                        }
                         Err(err) => Self::Errored(Some(io::Error::new(
                             io::ErrorKind::InvalidData,
                             format!("bad server name {:?}: {err}", &tls.server_name),
@@ -492,17 +494,7 @@ impl<P: RuntimeProvider> Future for HttpsClientConnectState<P> {
                     query_path,
                     tls,
                 } => {
-                    let res = match ready!(tls.poll_unpin(cx)) {
-                        Ok(res) => res,
-                        Err(_) => {
-                            return Poll::Ready(Err(io::Error::new(
-                                io::ErrorKind::TimedOut,
-                                format!("TLS handshake timed out after {CONNECT_TIMEOUT:?}"),
-                            )));
-                        }
-                    };
-
-                    let tls = res?;
+                    let tls = ready!(tls.poll_unpin(cx))?;
                     debug!("tls connection established to: {}", name_server);
                     let mut handshake = h2::client::Builder::new();
                     handshake.enable_push(false);

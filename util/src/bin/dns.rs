@@ -428,7 +428,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Protocol::Tcp => tcp(opts, provider).await?,
         Protocol::Tls => tls(opts, provider).await?,
         Protocol::Https => https(opts, provider).await?,
-        Protocol::Quic => quic(opts).await?,
+        Protocol::Quic => quic(opts, provider).await?,
         Protocol::H3 => h3(opts, provider).await?,
     };
 
@@ -561,12 +561,18 @@ async fn https<P: RuntimeProvider>(
 }
 
 #[cfg(not(feature = "__quic"))]
-async fn quic(_opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
+async fn quic<P: RuntimeProvider>(
+    _opts: Opts,
+    _provider: P,
+) -> Result<(), Box<dyn std::error::Error>> {
     panic!("`quic-aws-lc-rs` or `quic-ring` feature is required during compilation");
 }
 
 #[cfg(feature = "__quic")]
-async fn quic(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
+async fn quic<P: RuntimeProvider>(
+    opts: Opts,
+    provider: P,
+) -> Result<(), Box<dyn std::error::Error>> {
     use hickory_proto::quic::QuicClientStream;
 
     let nameserver = opts.nameserver;
@@ -585,8 +591,8 @@ async fn quic(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
     }
     config.alpn_protocols.push(alpn);
 
-    let (client, bg) = Client::<TokioRuntimeProvider>::connect(
-        QuicClientStream::builder()
+    let (client, bg) = Client::<P>::connect(
+        QuicClientStream::builder(provider)
             .crypto_config(config)
             .build(nameserver, Arc::from(dns_name)),
     )

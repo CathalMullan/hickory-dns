@@ -404,7 +404,7 @@ impl<P: RuntimeProvider> H3ClientStreamBuilder<P> {
         server_name: Arc<str>,
         path: Arc<str>,
     ) -> Result<H3ClientStream, io::Error> {
-        let quic_connection = connect_quic(
+        let quic_connection = connect_quic::<P>(
             name_server,
             server_name.clone(),
             ALPN_H3,
