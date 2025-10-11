@@ -24,8 +24,9 @@ use test_support::subscribe;
 
 use crate::{
     op::{Message, Query},
-    quic::QuicClientStreamBuilder,
+    quic::QuicClientStream,
     rr::{Name, RecordType},
+    runtime::TokioRuntimeProvider,
     rustls::default_provider,
     xfer::DnsRequestSender,
 };
@@ -98,7 +99,8 @@ async fn test_quic_stream() {
     client_config.key_log = Arc::new(KeyLogFile::new());
 
     println!("starting quic connect");
-    let builder = QuicClientStreamBuilder::default().crypto_config(client_config);
+    let provider = TokioRuntimeProvider::new();
+    let builder = QuicClientStream::builder(provider).crypto_config(client_config);
     let mut client_stream = builder
         .build(server_addr, Arc::from("ns.example.com"))
         .await

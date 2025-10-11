@@ -165,7 +165,7 @@ impl<P: RuntimeProvider> ConnectionProvider for P {
                 // The port (853) of DOT is for dns dedicated, SNI is unnecessary. (ISP block by the SNI name)
                 tls_config.enable_sni = false;
 
-                let (stream, handle) = tls_client_connect_with_future(
+                let (stream, handle) = tls_client_connect_with_future::<P, _>(
                     tcp_future,
                     remote_addr,
                     server_name.to_owned(),
@@ -195,7 +195,7 @@ impl<P: RuntimeProvider> ConnectionProvider for P {
                 });
 
                 Connecting::Quic(DnsExchange::connect(
-                    QuicClientStream::builder()
+                    QuicClientStream::builder(self.clone())
                         .crypto_config(cx.tls.config.clone())
                         .build_with_future(
                             binder.bind_quic(bind_addr, remote_addr)?,
