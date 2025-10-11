@@ -1,7 +1,7 @@
 //! Abstractions to deal with different async runtimes.
 
 use alloc::boxed::Box;
-#[cfg(feature = "__quic")]
+#[cfg(any(feature = "__tls", feature = "__quic"))]
 use alloc::sync::Arc;
 use core::future::Future;
 use core::marker::Send;
@@ -21,20 +21,25 @@ use crate::error::ProtoError;
 use crate::tcp::DnsTcpStream;
 use crate::udp::DnsUdpSocket;
 
-#[cfg(feature = "tokio")]
+#[cfg(feature = "std")]
 #[doc(hidden)]
 pub mod iocompat {
     use core::pin::Pin;
     use core::task::{Context, Poll};
-    use std::io::{self, IoSlice};
+    use std::io;
+    #[cfg(feature = "tokio")]
+    use std::io::IoSlice;
 
     use futures_io::{AsyncRead, AsyncWrite};
     use tokio::io::{AsyncRead as TokioAsyncRead, AsyncWrite as TokioAsyncWrite, ReadBuf};
 
     /// Conversion from `tokio::io::{AsyncRead, AsyncWrite}` to `std::io::{AsyncRead, AsyncWrite}`
+    #[cfg(feature = "tokio")]
     pub struct AsyncIoTokioAsStd<T: TokioAsyncRead + TokioAsyncWrite>(pub T);
 
+    #[cfg(feature = "tokio")]
     impl<T: TokioAsyncRead + TokioAsyncWrite + Unpin> Unpin for AsyncIoTokioAsStd<T> {}
+    #[cfg(feature = "tokio")]
     impl<R: TokioAsyncRead + TokioAsyncWrite + Unpin> AsyncRead for AsyncIoTokioAsStd<R> {
         fn poll_read(
             mut self: Pin<&mut Self>,
@@ -48,6 +53,7 @@ pub mod iocompat {
         }
     }
 
+    #[cfg(feature = "tokio")]
     impl<W: TokioAsyncRead + TokioAsyncWrite + Unpin> AsyncWrite for AsyncIoTokioAsStd<W> {
         fn poll_write(
             mut self: Pin<&mut Self>,
@@ -110,7 +116,6 @@ pub mod iocompat {
 }
 
 #[cfg(feature = "tokio")]
-#[allow(unreachable_pub)]
 mod tokio_runtime {
     use alloc::sync::Arc;
     use std::sync::Mutex;
