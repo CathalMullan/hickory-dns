@@ -26,24 +26,26 @@ license.workspace = true
 
 [features]
 default = ["system-config", "tokio"]
-backtrace = ["dep:backtrace", "hickory-proto/backtrace"]
+backtrace = ["hickory-proto/backtrace"]
+
+tokio = ["hickory-proto/tokio"]
 
 tls-aws-lc-rs = ["hickory-proto/tls-aws-lc-rs", "__tls"]
 https-aws-lc-rs = ["hickory-proto/https-aws-lc-rs", "__https"]
-quic-aws-lc-rs = ["hickory-proto/quic-aws-lc-rs", "__quic", "quinn/rustls-aws-lc-rs"]
+quic-aws-lc-rs = ["hickory-proto/quic-aws-lc-rs", "__quic"]
 h3-aws-lc-rs = ["hickory-proto/h3-aws-lc-rs", "__h3"]
 
 tls-ring = ["hickory-proto/tls-ring", "__tls"]
 https-ring = ["hickory-proto/https-ring", "__https"]
-quic-ring = ["hickory-proto/quic-ring", "__quic", "quinn/rustls-ring"]
+quic-ring = ["hickory-proto/quic-ring", "__quic"]
 h3-ring = ["hickory-proto/h3-ring", "__h3"]
 
-__tls = ["dep:rustls", "dep:tokio-rustls", "tokio"]
+__tls = ["dep:rustls"]
 __https = ["__tls"]
-__quic = ["dep:quinn", "__tls"]
+__quic = ["__tls"]
 __h3 = ["__quic"]
 
-webpki-roots = ["dep:webpki-roots", "hickory-proto/webpki-roots"]
+webpki-roots = ["hickory-proto/webpki-roots"]
 rustls-platform-verifier = ["hickory-proto/rustls-platform-verifier"]
 
 dnssec-aws-lc-rs = ["hickory-proto/dnssec-aws-lc-rs", "__dnssec"]
@@ -53,33 +55,22 @@ __dnssec = []
 serde = ["dep:serde", "hickory-proto/serde"]
 system-config = ["dep:ipconfig", "dep:resolv-conf", "dep:jni", "dep:ndk-context"]
 
-tokio = ["dep:tokio", "tokio/rt", "hickory-proto/tokio"]
-
 [lib]
 name = "hickory_resolver"
 path = "src/lib.rs"
 
 [dependencies]
-backtrace = { workspace = true, optional = true }
-cfg-if.workspace = true
-futures-util = { workspace = true, default-features = false, features = [
-    "std",
-] }
+futures-util = { workspace = true, default-features = false, features = ["std"] }
 moka = { workspace = true, features = ["sync"] }
 once_cell.workspace = true
 parking_lot.workspace = true
-quinn = { workspace = true, optional = true, features = ["log"] }
 rand.workspace = true
 resolv-conf = { workspace = true, optional = true, features = ["system"] }
 rustls = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive", "rc"], optional = true }
 smallvec.workspace = true
-thiserror.workspace = true
 tracing.workspace = true
-tokio = { workspace = true, optional = true }
-tokio-rustls = { workspace = true, optional = true }
 hickory-proto.workspace = true
-webpki-roots = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
 ipconfig = { workspace = true, optional = true }
@@ -94,6 +85,7 @@ hickory-proto = { workspace = true, features = ["tokio"] }
 serde_json = { workspace = true }
 test-support.workspace = true
 tokio = { workspace = true, features = ["macros", "test-util"] }
+tokio-rustls = { workspace = true }
 toml.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "std"] }
 

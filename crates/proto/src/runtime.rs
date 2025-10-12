@@ -16,27 +16,32 @@ use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
-#[cfg(any(test, feature = "tokio"))]
+#[cfg(feature = "tokio")]
 use tokio::runtime::Runtime;
 
 use crate::error::ProtoError;
 use crate::tcp::DnsTcpStream;
 use crate::udp::DnsUdpSocket;
 
-#[cfg(feature = "tokio")]
+#[cfg(feature = "std")]
 #[doc(hidden)]
 pub mod iocompat {
     use core::pin::Pin;
     use core::task::{Context, Poll};
-    use std::io::{self, IoSlice};
+    use std::io;
+    #[cfg(feature = "tokio")]
+    use std::io::IoSlice;
 
     use futures_io::{AsyncRead, AsyncWrite};
     use tokio::io::{AsyncRead as TokioAsyncRead, AsyncWrite as TokioAsyncWrite, ReadBuf};
 
     /// Conversion from `tokio::io::{AsyncRead, AsyncWrite}` to `std::io::{AsyncRead, AsyncWrite}`
+    #[cfg(feature = "tokio")]
     pub struct AsyncIoTokioAsStd<T: TokioAsyncRead + TokioAsyncWrite>(pub T);
 
+    #[cfg(feature = "tokio")]
     impl<T: TokioAsyncRead + TokioAsyncWrite + Unpin> Unpin for AsyncIoTokioAsStd<T> {}
+    #[cfg(feature = "tokio")]
     impl<R: TokioAsyncRead + TokioAsyncWrite + Unpin> AsyncRead for AsyncIoTokioAsStd<R> {
         fn poll_read(
             mut self: Pin<&mut Self>,
@@ -50,6 +55,7 @@ pub mod iocompat {
         }
     }
 
+    #[cfg(feature = "tokio")]
     impl<W: TokioAsyncRead + TokioAsyncWrite + Unpin> AsyncWrite for AsyncIoTokioAsStd<W> {
         fn poll_write(
             mut self: Pin<&mut Self>,
@@ -362,11 +368,11 @@ pub trait Time {
 }
 
 /// New type which is implemented using tokio::time::{Delay, Timeout}
-#[cfg(any(test, feature = "tokio"))]
+#[cfg(feature = "tokio")]
 #[derive(Clone, Copy, Debug)]
 pub struct TokioTime;
 
-#[cfg(any(test, feature = "tokio"))]
+#[cfg(feature = "tokio")]
 #[async_trait]
 impl Time for TokioTime {
     async fn delay_for(duration: Duration) {

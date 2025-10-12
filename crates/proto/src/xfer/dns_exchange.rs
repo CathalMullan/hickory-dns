@@ -22,12 +22,12 @@ use futures_util::{
 };
 use tracing::debug;
 
-#[cfg(all(feature = "__https", feature = "tokio"))]
+#[cfg(feature = "__https")]
 use crate::h2::{HttpsClientConnect, HttpsClientStream};
-#[cfg(all(feature = "__h3", feature = "tokio"))]
+#[cfg(feature = "__h3")]
 use crate::h3::{H3ClientConnect, H3ClientStream};
 use crate::op::{DnsRequest, DnsResponse};
-#[cfg(all(feature = "__quic", feature = "tokio"))]
+#[cfg(feature = "__quic")]
 use crate::quic::{QuicClientConnect, QuicClientStream};
 use crate::runtime::RuntimeProvider;
 #[cfg(feature = "std")]
@@ -70,11 +70,11 @@ pub enum Connecting<P: RuntimeProvider> {
             P,
         >,
     ),
-    #[cfg(all(feature = "__https", feature = "tokio"))]
+    #[cfg(feature = "__https")]
     Https(DnsExchangeConnect<HttpsClientConnect<P>, HttpsClientStream, P>),
-    #[cfg(all(feature = "__quic", feature = "tokio"))]
+    #[cfg(feature = "__quic")]
     Quic(DnsExchangeConnect<QuicClientConnect, QuicClientStream, P>),
-    #[cfg(all(feature = "__h3", feature = "tokio"))]
+    #[cfg(feature = "__h3")]
     H3(DnsExchangeConnect<H3ClientConnect, H3ClientStream, P>),
 }
 
