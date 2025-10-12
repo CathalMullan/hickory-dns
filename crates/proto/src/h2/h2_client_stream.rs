@@ -27,7 +27,6 @@ use h2::client::{Connection, SendRequest};
 use http::header::{self, CONTENT_LENGTH};
 use rustls::ClientConfig;
 use rustls::pki_types::ServerName;
-use tokio_rustls::{TlsConnector, client::TlsStream as TokioTlsClientStream};
 use tracing::{debug, warn};
 
 use crate::error::ProtoError;
@@ -413,8 +412,7 @@ enum HttpsClientConnectState<P: RuntimeProvider> {
     },
     TlsConnecting {
         provider: P,
-        // TODO: also abstract away Tokio TLS in RuntimeProvider.
-        tls: BoxFuture<'static, Result<TokioTlsClientStream<AsyncIoStdAsTokio<P::Tcp>>, io::Error>>,
+        tls: BoxFuture<'static, Result<P::Tls, io::Error>>,
         name_server_name: Arc<str>,
         name_server: SocketAddr,
         query_path: Arc<str>,
@@ -426,7 +424,7 @@ enum HttpsClientConnectState<P: RuntimeProvider> {
             Result<
                 (
                     SendRequest<Bytes>,
-                    Connection<TokioTlsClientStream<AsyncIoStdAsTokio<P::Tcp>>, Bytes>,
+                    Connection<AsyncIoStdAsTokio<P::Tls>, Bytes>,
                 ),
                 h2::Error,
             >,
@@ -462,9 +460,8 @@ impl<P: RuntimeProvider> Future for HttpsClientConnectState<P> {
 
                     match ServerName::try_from(&*tls.server_name) {
                         Ok(dns_name) => {
-                            let tls_connector = TlsConnector::from(tls.client_config);
                             let future =
-                                tls_connector.connect(dns_name.to_owned(), AsyncIoStdAsTokio(tcp));
+                                provider.connect_tls(tcp, dns_name.to_owned(), tls.client_config);
 
                             Self::TlsConnecting {
                                 name_server_name,
@@ -499,7 +496,7 @@ impl<P: RuntimeProvider> Future for HttpsClientConnectState<P> {
                     let mut handshake = h2::client::Builder::new();
                     handshake.enable_push(false);
 
-                    let handshake = handshake.handshake(tls);
+                    let handshake = handshake.handshake(AsyncIoStdAsTokio(tls));
                     Self::H2Handshake {
                         provider: provider.clone(),
                         name_server_name: Arc::clone(name_server_name),

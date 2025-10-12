@@ -168,6 +168,7 @@ impl<P: RuntimeProvider> ConnectionProvider for P {
                     remote_addr,
                     server_name.to_owned(),
                     Arc::new(tls_config),
+                    self.clone(),
                 );
 
                 Connecting::Tls(DnsExchange::connect(DnsMultiplexer::with_timeout(
