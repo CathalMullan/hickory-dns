@@ -34,7 +34,7 @@ use crate::op::{DnsRequest, DnsResponse};
 use crate::quic::connect_quic;
 use crate::runtime::{RuntimeProvider, Spawn};
 use crate::rustls::client_config;
-use crate::udp::UdpSocket;
+use crate::udp::DnsUdpSocket;
 use crate::xfer::{DnsRequestSender, DnsResponseStream};
 
 use super::ALPN_H3;
@@ -346,7 +346,7 @@ impl<P: RuntimeProvider> H3ClientStreamBuilder<P> {
     /// Creates a new H3Stream with existing connection
     pub fn build_with_future(
         self,
-        socket: Arc<dyn quinn::AsyncUdpSocket>,
+        socket: P::Udp,
         name_server: SocketAddr,
         server_name: Arc<str>,
         path: Arc<str>,
@@ -358,12 +358,14 @@ impl<P: RuntimeProvider> H3ClientStreamBuilder<P> {
 
     async fn connect_with_future(
         self,
-        socket: Arc<dyn quinn::AsyncUdpSocket>,
+        socket: P::Udp,
         name_server: SocketAddr,
         server_name: Arc<str>,
         path: Arc<str>,
     ) -> Result<H3ClientStream, io::Error> {
-        let endpoint = Endpoint::new_with_abstract_socket(
+        let socket = socket.into_std()?;
+
+        let endpoint = Endpoint::new(
             EndpointConfig::default(),
             None,
             socket,
@@ -379,14 +381,17 @@ impl<P: RuntimeProvider> H3ClientStreamBuilder<P> {
         server_name: Arc<str>,
         path: Arc<str>,
     ) -> Result<H3ClientStream, io::Error> {
-        let connect = if let Some(bind_addr) = self.bind_addr {
-            <tokio::net::UdpSocket as UdpSocket>::connect_with_bind(name_server, bind_addr)
-        } else {
-            <tokio::net::UdpSocket as UdpSocket>::connect(name_server)
-        };
+        let bind_addr = self.bind_addr.unwrap_or_else(|| {
+            if name_server.is_ipv4() {
+                "0.0.0.0:0".parse().unwrap()
+            } else {
+                "[::]:0".parse().unwrap()
+            }
+        });
 
-        let socket = connect.await?;
+        let socket = self.provider.bind_udp(bind_addr, name_server).await?;
         let socket = socket.into_std()?;
+
         let endpoint = Endpoint::new(
             EndpointConfig::default(),
             None,

@@ -9,8 +9,6 @@ use std::future::Future;
 use std::io;
 use std::marker::Unpin;
 use std::net::{IpAddr, SocketAddr};
-#[cfg(feature = "__quic")]
-use std::net::{Ipv4Addr, Ipv6Addr};
 use std::pin::Pin;
 #[cfg(any(feature = "__tls", feature = "__https"))]
 use std::sync::Arc;
@@ -123,8 +121,8 @@ impl<P: RuntimeProvider> ConnectionProvider for P {
         cx: &PoolContext,
     ) -> Result<Self::FutureConn, io::Error> {
         let remote_addr = SocketAddr::new(ip, config.port);
-        let dns_connect = match (&config.protocol, self.quic_binder()) {
-            (ProtocolConfig::Udp, _) => {
+        let dns_connect = match &config.protocol {
+            ProtocolConfig::Udp => {
                 let provider_handle = self.clone();
                 let stream = UdpClientStream::builder(remote_addr, provider_handle)
                     .with_timeout(Some(cx.options.timeout))
@@ -135,7 +133,7 @@ impl<P: RuntimeProvider> ConnectionProvider for P {
                 let exchange = DnsExchange::connect(stream);
                 Connecting::Udp(exchange)
             }
-            (ProtocolConfig::Tcp, _) => {
+            ProtocolConfig::Tcp => {
                 let (future, handle) = TcpClientStream::new(
                     remote_addr,
                     config.bind_addr,
@@ -150,7 +148,7 @@ impl<P: RuntimeProvider> ConnectionProvider for P {
                 Connecting::Tcp(exchange)
             }
             #[cfg(feature = "__tls")]
-            (ProtocolConfig::Tls { server_name }, _) => {
+            ProtocolConfig::Tls { server_name } => {
                 let timeout = cx.options.timeout;
                 let tcp_future = self.connect_tcp(remote_addr, None, None);
 
@@ -177,7 +175,7 @@ impl<P: RuntimeProvider> ConnectionProvider for P {
                 )))
             }
             #[cfg(feature = "__https")]
-            (ProtocolConfig::Https { server_name, path }, _) => {
+            ProtocolConfig::Https { server_name, path } => {
                 Connecting::Https(DnsExchange::connect(HttpsClientConnect::new(
                     self.connect_tcp(remote_addr, None, None),
                     Arc::new(cx.tls.config.clone()),
@@ -188,61 +186,37 @@ impl<P: RuntimeProvider> ConnectionProvider for P {
                 )))
             }
             #[cfg(feature = "__quic")]
-            (ProtocolConfig::Quic { server_name }, Some(binder)) => {
-                let bind_addr = config.bind_addr.unwrap_or(match remote_addr {
-                    SocketAddr::V4(_) => SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0),
-                    SocketAddr::V6(_) => SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0),
-                });
+            ProtocolConfig::Quic { server_name } => {
+                let mut builder =
+                    QuicClientStream::builder(self.clone()).crypto_config(cx.tls.config.clone());
+
+                if let Some(bind_addr) = config.bind_addr {
+                    builder = builder.bind_addr(bind_addr);
+                }
 
                 Connecting::Quic(DnsExchange::connect(
-                    QuicClientStream::builder(self.clone())
-                        .crypto_config(cx.tls.config.clone())
-                        .build_with_future(
-                            binder.bind_quic(bind_addr, remote_addr)?,
-                            remote_addr,
-                            server_name.clone(),
-                        ),
+                    builder.build(remote_addr, server_name.clone()),
                 ))
             }
             #[cfg(feature = "__h3")]
-            (
-                ProtocolConfig::H3 {
-                    server_name,
-                    path,
-                    disable_grease,
-                },
-                Some(binder),
-            ) => {
-                let bind_addr = config.bind_addr.unwrap_or(match remote_addr {
-                    SocketAddr::V4(_) => SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0),
-                    SocketAddr::V6(_) => SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0),
-                });
+            ProtocolConfig::H3 {
+                server_name,
+                path,
+                disable_grease,
+            } => {
+                let mut builder = H3ClientStream::builder(self.clone())
+                    .crypto_config(cx.tls.config.clone())
+                    .disable_grease(*disable_grease);
 
-                Connecting::H3(DnsExchange::connect(
-                    H3ClientStream::builder(self.clone())
-                        .crypto_config(cx.tls.config.clone())
-                        .disable_grease(*disable_grease)
-                        .build_with_future(
-                            binder.bind_quic(bind_addr, remote_addr)?,
-                            remote_addr,
-                            server_name.clone(),
-                            path.clone(),
-                        ),
-                ))
-            }
-            #[cfg(feature = "__quic")]
-            (ProtocolConfig::Quic { .. }, None) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "runtime provider does not support QUIC",
-                ));
-            }
-            #[cfg(feature = "__h3")]
-            (ProtocolConfig::H3 { .. }, None) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "runtime provider does not support QUIC",
-                ));
+                if let Some(bind_addr) = config.bind_addr {
+                    builder = builder.bind_addr(bind_addr);
+                }
+
+                Connecting::H3(DnsExchange::connect(builder.build(
+                    remote_addr,
+                    server_name.clone(),
+                    path.clone(),
+                )))
             }
         };
 

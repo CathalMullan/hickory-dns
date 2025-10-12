@@ -1,8 +1,6 @@
 //! Abstractions to deal with different async runtimes.
 
 use alloc::boxed::Box;
-#[cfg(feature = "__quic")]
-use alloc::sync::Arc;
 use core::future::Future;
 use core::marker::Send;
 use core::net::SocketAddr;
@@ -113,8 +111,6 @@ mod tokio_runtime {
     use alloc::sync::Arc;
     use std::sync::Mutex;
 
-    #[cfg(feature = "__quic")]
-    use quinn::Runtime;
     use tokio::net::{TcpSocket, TcpStream, UdpSocket as TokioUdpSocket};
     use tokio::task::JoinSet;
     use tokio::time::timeout;
@@ -204,33 +200,17 @@ mod tokio_runtime {
             local_addr: SocketAddr,
             _server_addr: SocketAddr,
         ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Udp>>>> {
-            Box::pin(tokio::net::UdpSocket::bind(local_addr))
+            Box::pin(TokioUdpSocket::bind(local_addr))
         }
 
-        #[cfg(feature = "__quic")]
-        fn quic_binder(&self) -> Option<&dyn QuicSocketBinder> {
-            Some(&TokioQuicSocketBinder)
+        fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Self::Udp> {
+            TokioUdpSocket::from_std(socket)
         }
     }
 
     /// Reap finished tasks from a `JoinSet`, without awaiting or blocking.
     fn reap_tasks(join_set: &mut JoinSet<Result<(), ProtoError>>) {
         while join_set.try_join_next().is_some() {}
-    }
-
-    #[cfg(feature = "__quic")]
-    struct TokioQuicSocketBinder;
-
-    #[cfg(feature = "__quic")]
-    impl QuicSocketBinder for TokioQuicSocketBinder {
-        fn bind_quic(
-            &self,
-            local_addr: SocketAddr,
-            _server_addr: SocketAddr,
-        ) -> Result<Arc<dyn quinn::AsyncUdpSocket>, io::Error> {
-            let socket = std::net::UdpSocket::bind(local_addr)?;
-            quinn::TokioRuntime.wrap_udp_socket(socket)
-        }
     }
 }
 
@@ -270,29 +250,8 @@ pub trait RuntimeProvider: Clone + Send + Sync + Unpin + 'static {
         server_addr: SocketAddr,
     ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Udp>>>>;
 
-    /// Yields an object that knows how to bind a QUIC socket.
-    //
-    // Use some indirection here to avoid exposing the `quinn` crate in the public API
-    // even for runtimes that might not (want to) provide QUIC support.
-    fn quic_binder(&self) -> Option<&dyn QuicSocketBinder> {
-        None
-    }
-}
-
-/// Noop trait for when the `quinn` dependency is not available.
-#[cfg(not(feature = "__quic"))]
-pub trait QuicSocketBinder {}
-
-/// Create a UDP socket for QUIC usage.
-/// This trait is designed for customization.
-#[cfg(feature = "__quic")]
-pub trait QuicSocketBinder {
-    /// Create a UDP socket for QUIC usage.
-    fn bind_quic(
-        &self,
-        _local_addr: SocketAddr,
-        _server_addr: SocketAddr,
-    ) -> Result<Arc<dyn quinn::AsyncUdpSocket>, io::Error>;
+    /// Wrap a std::net::UdpSocket into the runtime's UDP socket type
+    fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Self::Udp>;
 }
 
 /// A type defines the Handle which can spawn future.

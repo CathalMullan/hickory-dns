@@ -74,6 +74,11 @@ impl RuntimeProvider for PrintProvider {
         println!("Create udp local_addr: {local_addr}, server_addr: {server_addr}");
         Box::pin(UdpSocket::bind(local_addr))
     }
+
+    fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Self::Udp> {
+        println!("Wrapping std UDP socket");
+        UdpSocket::from_std(socket)
+    }
 }
 
 #[cfg(any(feature = "webpki-roots", feature = "rustls-platform-verifier"))]

@@ -8,7 +8,6 @@
 use alloc::boxed::Box;
 use core::fmt::{self, Display};
 use core::future::Future;
-use core::marker::PhantomData;
 use core::net::{Ipv4Addr, SocketAddr};
 use core::pin::Pin;
 use core::task::{Context, Poll};
@@ -29,8 +28,7 @@ use crate::xfer::DnsClientStream;
 /// A UDP client stream of DNS binary packets
 #[must_use = "futures do nothing unless polled"]
 pub struct MdnsClientStream<P: RuntimeProvider> {
-    mdns_stream: MdnsStream,
-    _phantom: PhantomData<P>,
+    mdns_stream: MdnsStream<P>,
 }
 
 impl<P: RuntimeProvider> MdnsClientStream<P> {
@@ -39,8 +37,16 @@ impl<P: RuntimeProvider> MdnsClientStream<P> {
         mdns_query_type: MdnsQueryType,
         packet_ttl: Option<u32>,
         ipv4_if: Option<Ipv4Addr>,
+        provider: P,
     ) -> (MdnsClientConnect<P>, BufDnsStreamHandle) {
-        Self::new(*MDNS_IPV4, mdns_query_type, packet_ttl, ipv4_if, None)
+        Self::new(
+            *MDNS_IPV4,
+            mdns_query_type,
+            packet_ttl,
+            ipv4_if,
+            None,
+            provider,
+        )
     }
 
     /// associates the socket to the well-known ipv6 multicast address
@@ -48,8 +54,16 @@ impl<P: RuntimeProvider> MdnsClientStream<P> {
         mdns_query_type: MdnsQueryType,
         packet_ttl: Option<u32>,
         ipv6_if: Option<u32>,
+        provider: P,
     ) -> (MdnsClientConnect<P>, BufDnsStreamHandle) {
-        Self::new(*MDNS_IPV6, mdns_query_type, packet_ttl, None, ipv6_if)
+        Self::new(
+            *MDNS_IPV6,
+            mdns_query_type,
+            packet_ttl,
+            None,
+            ipv6_if,
+            provider,
+        )
     }
 
     /// it is expected that the resolver wrapper will be responsible for creating and managing
@@ -67,14 +81,20 @@ impl<P: RuntimeProvider> MdnsClientStream<P> {
         packet_ttl: Option<u32>,
         ipv4_if: Option<Ipv4Addr>,
         ipv6_if: Option<u32>,
+        provider: P,
     ) -> (MdnsClientConnect<P>, BufDnsStreamHandle) {
-        let (stream_future, sender) =
-            MdnsStream::new(mdns_addr, mdns_query_type, packet_ttl, ipv4_if, ipv6_if);
+        let (stream_future, sender) = MdnsStream::new(
+            mdns_addr,
+            mdns_query_type,
+            packet_ttl,
+            ipv4_if,
+            ipv6_if,
+            provider,
+        );
 
         let new_future = Box::pin(async {
             Ok(Self {
                 mdns_stream: stream_future.await?,
-                _phantom: PhantomData,
             })
         });
         let new_future = MdnsClientConnect(new_future);

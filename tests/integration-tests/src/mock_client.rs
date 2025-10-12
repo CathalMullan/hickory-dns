@@ -69,6 +69,10 @@ pub struct UdpPlaceholder;
 impl DnsUdpSocket for UdpPlaceholder {
     type Time = TokioTime;
 
+    fn into_std(self) -> io::Result<std::net::UdpSocket> {
+        std::net::UdpSocket::bind("127.0.0.1:0")
+    }
+
     fn poll_recv_from(
         &self,
         _cx: &mut Context<'_>,
@@ -118,6 +122,10 @@ impl RuntimeProvider for MockRuntimeProvider {
         _server_addr: SocketAddr,
     ) -> Pin<Box<dyn Send + Future<Output = std::io::Result<Self::Udp>>>> {
         Box::pin(async { Ok(UdpPlaceholder) })
+    }
+
+    fn wrap_udp_socket(&self, _socket: std::net::UdpSocket) -> io::Result<Self::Udp> {
+        Ok(UdpPlaceholder)
     }
 }
 

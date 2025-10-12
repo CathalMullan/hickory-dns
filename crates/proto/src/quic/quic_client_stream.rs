@@ -29,7 +29,7 @@ use crate::{
     quic::quic_stream::{DoqErrorCode, QuicStream},
     runtime::{RuntimeProvider, Time},
     rustls::client_config,
-    udp::UdpSocket,
+    udp::DnsUdpSocket,
     xfer::{CONNECT_TIMEOUT, DnsRequestSender, DnsResponseStream},
 };
 
@@ -207,7 +207,6 @@ impl Stream for QuicClientStream {
 /// A QUIC connection builder for DNS-over-QUIC
 #[derive(Clone)]
 pub struct QuicClientStreamBuilder<P: RuntimeProvider> {
-    #[expect(unused)]
     provider: P,
     crypto_config: Option<rustls::ClientConfig>,
     transport_config: Arc<TransportConfig>,
@@ -240,7 +239,7 @@ impl<P: RuntimeProvider> QuicClientStreamBuilder<P> {
     /// Create a QuicStream with existing connection
     pub fn build_with_future(
         self,
-        socket: Arc<dyn quinn::AsyncUdpSocket>,
+        socket: P::Udp,
         name_server: SocketAddr,
         server_name: Arc<str>,
     ) -> QuicClientConnect {
@@ -249,17 +248,14 @@ impl<P: RuntimeProvider> QuicClientStreamBuilder<P> {
 
     async fn connect_with_future(
         self,
-        socket: Arc<dyn quinn::AsyncUdpSocket>,
+        socket: P::Udp,
         name_server: SocketAddr,
         server_name: Arc<str>,
     ) -> Result<QuicClientStream, io::Error> {
+        let socket = socket.into_std()?;
+
         let endpoint_config = quic_config::endpoint();
-        let endpoint = Endpoint::new_with_abstract_socket(
-            endpoint_config,
-            None,
-            socket,
-            Arc::new(quinn::TokioRuntime),
-        )?;
+        let endpoint = Endpoint::new(endpoint_config, None, socket, Arc::new(quinn::TokioRuntime))?;
         self.connect_inner(endpoint, name_server, server_name).await
     }
 
@@ -268,14 +264,17 @@ impl<P: RuntimeProvider> QuicClientStreamBuilder<P> {
         name_server: SocketAddr,
         server_name: Arc<str>,
     ) -> Result<QuicClientStream, io::Error> {
-        let connect = if let Some(bind_addr) = self.bind_addr {
-            <tokio::net::UdpSocket as UdpSocket>::connect_with_bind(name_server, bind_addr)
-        } else {
-            <tokio::net::UdpSocket as UdpSocket>::connect(name_server)
-        };
+        let bind_addr = self.bind_addr.unwrap_or_else(|| {
+            if name_server.is_ipv4() {
+                "0.0.0.0:0".parse().unwrap()
+            } else {
+                "[::]:0".parse().unwrap()
+            }
+        });
 
-        let socket = connect.await?;
+        let socket = self.provider.bind_udp(bind_addr, name_server).await?;
         let socket = socket.into_std()?;
+
         let endpoint_config = quic_config::endpoint();
         let endpoint = Endpoint::new(endpoint_config, None, socket, Arc::new(quinn::TokioRuntime))?;
         self.connect_inner(endpoint, name_server, server_name).await
