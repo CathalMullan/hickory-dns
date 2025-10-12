@@ -15,6 +15,7 @@ use rustls::server::ResolvesServerCert;
 use rustls::server::ServerConfig as TlsServerConfig;
 use rustls::version::TLS13;
 
+use crate::quic::quic_runtime::QuinnRuntimeAdapter;
 use crate::runtime::RuntimeProvider;
 use crate::udp::DnsUdpSocket;
 use crate::{error::ProtoError, rustls::default_provider};
@@ -37,13 +38,14 @@ impl QuicServer {
         provider: P,
     ) -> Result<Self, ProtoError> {
         let socket = provider.bind_udp(name_server, name_server).await?;
-        Self::with_socket::<P>(socket, server_cert_resolver)
+        Self::with_socket(socket, server_cert_resolver, provider)
     }
 
     /// Construct the new server with an existing socket and a default TLS configuration
     pub fn with_socket<P: RuntimeProvider>(
         socket: P::Udp,
         server_cert_resolver: Arc<dyn ResolvesServerCert>,
+        provider: P,
     ) -> Result<Self, ProtoError> {
         let mut config = TlsServerConfig::builder_with_provider(Arc::new(default_provider()))
             .with_protocol_versions(&[&TLS13])
@@ -53,7 +55,7 @@ impl QuicServer {
 
         config.alpn_protocols = vec![quic_stream::DOQ_ALPN.to_vec()];
 
-        Self::with_socket_and_tls_config::<P>(socket, Arc::new(config))
+        Self::with_socket_and_tls_config(socket, Arc::new(config), provider)
     }
 
     /// Construct the new server with an existing socket and a custom TLS configuration
@@ -62,6 +64,7 @@ impl QuicServer {
     pub fn with_socket_and_tls_config<P: RuntimeProvider>(
         socket: P::Udp,
         tls_config: Arc<TlsServerConfig>,
+        provider: P,
     ) -> Result<Self, ProtoError> {
         let mut server_config =
             ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(tls_config)?));
@@ -74,7 +77,7 @@ impl QuicServer {
             endpoint_config,
             Some(server_config),
             socket,
-            Arc::new(quinn::TokioRuntime),
+            Arc::new(QuinnRuntimeAdapter::new(provider.clone())),
         )?;
 
         Ok(Self { endpoint })

@@ -103,7 +103,7 @@ ipnet.workspace = true
 js-sys = { workspace = true, optional = true }
 once_cell = { workspace = true }
 pin-project-lite = { workspace = true, optional = true }
-quinn = { workspace = true, optional = true, features = ["log", "runtime-tokio"] }
+quinn = { workspace = true, optional = true, features = ["log"] }
 rand = { workspace = true, features = ["std_rng"] }
 ring = { workspace = true, optional = true, features = ["std"] }
 rustls = { workspace = true, optional = true, default-features = false }

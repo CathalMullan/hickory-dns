@@ -77,6 +77,10 @@ impl DnsUdpSocket for UdpPlaceholder {
         std::net::UdpSocket::bind("127.0.0.1:0")
     }
 
+    fn poll_recv_ready(&self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+
     fn poll_recv_from(
         &self,
         _cx: &mut Context<'_>,
@@ -86,6 +90,10 @@ impl DnsUdpSocket for UdpPlaceholder {
             buf.len(),
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(255, 255, 255, 77)), 1),
         )))
+    }
+
+    fn poll_send_ready(&self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
     }
 
     fn poll_send_to(

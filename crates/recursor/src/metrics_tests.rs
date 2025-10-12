@@ -303,6 +303,10 @@ impl DnsUdpSocket for MockUdpSocket {
         std::net::UdpSocket::bind("127.0.0.1:0")
     }
 
+    fn poll_recv_ready(&self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+
     fn poll_recv_from(
         &self,
         cx: &mut Context<'_>,
@@ -323,6 +327,10 @@ impl DnsUdpSocket for MockUdpSocket {
         };
         buf[..encoded.len()].copy_from_slice(&encoded);
         Poll::Ready(Ok((encoded.len(), socket_addr)))
+    }
+
+    fn poll_send_ready(&self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
     }
 
     fn poll_send_to(

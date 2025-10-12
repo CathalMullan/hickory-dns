@@ -41,10 +41,11 @@ pub(super) async fn handle_h3(
     server_cert_resolver: Arc<dyn ResolvesServerCert>,
     dns_hostname: Option<String>,
     cx: Arc<ServerContext<impl RequestHandler>>,
+    provider: TokioRuntimeProvider,
 ) -> Result<(), ProtoError> {
     debug!("registered h3: {:?}", socket);
     handle_h3_with_server(
-        H3Server::with_socket::<TokioRuntimeProvider>(socket, server_cert_resolver)?,
+        H3Server::with_socket(socket, server_cert_resolver, provider)?,
         dns_hostname,
         cx,
     )

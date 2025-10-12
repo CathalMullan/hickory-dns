@@ -39,6 +39,9 @@ where
     /// Convert this socket into a std::net::UdpSocket
     fn into_std(self) -> io::Result<std::net::UdpSocket>;
 
+    /// Poll for read readiness
+    fn poll_recv_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>>;
+
     /// Poll once Receive data from the socket and returns the number of bytes read and the address from
     /// where the data came on success.
     fn poll_recv_from(
@@ -52,6 +55,9 @@ where
     async fn recv_from(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
         poll_fn(|cx| self.poll_recv_from(cx, buf)).await
     }
+
+    /// Poll for write readiness
+    fn poll_send_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>>;
 
     /// Poll once to send data to the given address.
     fn poll_send_to(
@@ -386,6 +392,10 @@ impl DnsUdpSocket for tokio::net::UdpSocket {
         self.into_std()
     }
 
+    fn poll_recv_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Self::poll_recv_ready(self, cx)
+    }
+
     fn poll_recv_from(
         &self,
         cx: &mut Context<'_>,
@@ -396,6 +406,10 @@ impl DnsUdpSocket for tokio::net::UdpSocket {
         let len = buf.filled().len();
 
         Poll::Ready(Ok((len, addr)))
+    }
+
+    fn poll_send_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Self::poll_send_ready(self, cx)
     }
 
     fn poll_send_to(

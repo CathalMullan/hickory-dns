@@ -26,7 +26,10 @@ use quinn::{
 use crate::{
     error::ProtoError,
     op::{DnsRequest, DnsResponse},
-    quic::quic_stream::{DoqErrorCode, QuicStream},
+    quic::{
+        quic_runtime::QuinnRuntimeAdapter,
+        quic_stream::{DoqErrorCode, QuicStream},
+    },
     runtime::{RuntimeProvider, Time},
     rustls::client_config,
     udp::DnsUdpSocket,
@@ -255,7 +258,12 @@ impl<P: RuntimeProvider> QuicClientStreamBuilder<P> {
         let socket = socket.into_std()?;
 
         let endpoint_config = quic_config::endpoint();
-        let endpoint = Endpoint::new(endpoint_config, None, socket, Arc::new(quinn::TokioRuntime))?;
+        let endpoint = Endpoint::new(
+            endpoint_config,
+            None,
+            socket,
+            Arc::new(QuinnRuntimeAdapter::new(self.provider.clone())),
+        )?;
         self.connect_inner(endpoint, name_server, server_name).await
     }
 
@@ -276,7 +284,12 @@ impl<P: RuntimeProvider> QuicClientStreamBuilder<P> {
         let socket = socket.into_std()?;
 
         let endpoint_config = quic_config::endpoint();
-        let endpoint = Endpoint::new(endpoint_config, None, socket, Arc::new(quinn::TokioRuntime))?;
+        let endpoint = Endpoint::new(
+            endpoint_config,
+            None,
+            socket,
+            Arc::new(QuinnRuntimeAdapter::new(self.provider.clone())),
+        )?;
         self.connect_inner(endpoint, name_server, server_name).await
     }
 

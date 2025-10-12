@@ -460,7 +460,7 @@ pub(crate) mod tests {
     async fn test_next_random_socket() {
         subscribe();
 
-        let (stream, _) = MdnsStream::new(
+        let (stream, _) = MdnsStream::<TokioRuntimeProvider>::new(
             SocketAddr::new(*TEST_MDNS_IPV4, BASE_TEST_PORT),
             MdnsQueryType::OneShot,
             Some(1),

@@ -71,6 +71,8 @@ pub use timeout_stream::TimeoutStream;
 // TODO, would be nice to have a Slab for buffers here...
 /// A Futures based implementation of a DNS server
 pub struct Server<T: RequestHandler> {
+    #[allow(unused)]
+    provider: TokioRuntimeProvider,
     context: Arc<ServerContext<T>>,
     join_set: JoinSet<Result<(), ProtoError>>,
 }
@@ -88,6 +90,7 @@ impl<T: RequestHandler> Server<T> {
         access.insert_allow(allowed_networks);
 
         Self {
+            provider: TokioRuntimeProvider::new(),
             context: Arc::new(ServerContext {
                 handler,
                 access,
@@ -285,6 +288,7 @@ impl<T: RequestHandler> Server<T> {
             server_cert_resolver,
             dns_hostname,
             cx,
+            self.provider.clone(),
         ));
         Ok(())
     }
@@ -319,7 +323,7 @@ impl<T: RequestHandler> Server<T> {
         let cx = self.context.clone();
 
         self.join_set.spawn(quic_handler::handle_quic_with_server(
-            QuicServer::with_socket_and_tls_config::<TokioRuntimeProvider>(socket, tls_config)?,
+            QuicServer::with_socket_and_tls_config(socket, tls_config, self.provider.clone())?,
             dns_hostname,
             cx,
         ));
@@ -353,6 +357,7 @@ impl<T: RequestHandler> Server<T> {
             server_cert_resolver,
             dns_hostname,
             self.context.clone(),
+            self.provider.clone(),
         ));
         Ok(())
     }
@@ -384,7 +389,7 @@ impl<T: RequestHandler> Server<T> {
         dns_hostname: Option<String>,
     ) -> io::Result<()> {
         self.join_set.spawn(h3_handler::handle_h3_with_server(
-            H3Server::with_socket_and_tls_config::<TokioRuntimeProvider>(socket, tls_config)?,
+            H3Server::with_socket_and_tls_config(socket, tls_config, self.provider.clone())?,
             dns_hostname,
             self.context.clone(),
         ));
