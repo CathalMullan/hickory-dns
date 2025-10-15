@@ -34,20 +34,25 @@ pub fn spawn_bg<F: Future<Output = R> + Send + 'static, R: Send + 'static>(
     runtime.spawn(background)
 }
 
-#[cfg(feature = "tokio")]
+#[cfg(feature = "std")]
 #[doc(hidden)]
 pub mod iocompat {
     use core::pin::Pin;
     use core::task::{Context, Poll};
-    use std::io::{self, IoSlice};
+    use std::io;
+    #[cfg(feature = "tokio")]
+    use std::io::IoSlice;
 
     use futures_io::{AsyncRead, AsyncWrite};
     use tokio::io::{AsyncRead as TokioAsyncRead, AsyncWrite as TokioAsyncWrite, ReadBuf};
 
     /// Conversion from `tokio::io::{AsyncRead, AsyncWrite}` to `std::io::{AsyncRead, AsyncWrite}`
+    #[cfg(feature = "tokio")]
     pub struct AsyncIoTokioAsStd<T: TokioAsyncRead + TokioAsyncWrite>(pub T);
 
+    #[cfg(feature = "tokio")]
     impl<T: TokioAsyncRead + TokioAsyncWrite + Unpin> Unpin for AsyncIoTokioAsStd<T> {}
+    #[cfg(feature = "tokio")]
     impl<R: TokioAsyncRead + TokioAsyncWrite + Unpin> AsyncRead for AsyncIoTokioAsStd<R> {
         fn poll_read(
             mut self: Pin<&mut Self>,
@@ -61,6 +66,7 @@ pub mod iocompat {
         }
     }
 
+    #[cfg(feature = "tokio")]
     impl<W: TokioAsyncRead + TokioAsyncWrite + Unpin> AsyncWrite for AsyncIoTokioAsStd<W> {
         fn poll_write(
             mut self: Pin<&mut Self>,
@@ -147,6 +153,14 @@ mod tokio_runtime {
     }
 
     impl Spawn for TokioHandle {
+        fn spawn<F>(&mut self, future: F)
+        where
+            F: Future + Send + 'static,
+            F::Output: Send + 'static,
+        {
+            tokio::spawn(future);
+        }
+
         fn spawn_bg<F>(&mut self, future: F)
         where
             F: Future<Output = Result<(), ProtoError>> + Send + 'static,
@@ -339,7 +353,15 @@ pub trait QuicSocketBinder {
 
 /// A type defines the Handle which can spawn future.
 pub trait Spawn {
-    /// Spawn a future in the background
+    /// Spawn a future.
+    fn spawn<F>(&mut self, future: F)
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static;
+
+    /// Spawn a future in the background.
+    ///
+    /// This should track and periodically reap completed tasks, in order to prevent unbounded memory growth.
     fn spawn_bg<F>(&mut self, future: F)
     where
         F: Future<Output = Result<(), ProtoError>> + Send + 'static;

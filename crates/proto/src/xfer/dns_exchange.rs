@@ -22,7 +22,7 @@ use futures_util::{
 };
 use tracing::debug;
 
-#[cfg(all(feature = "__https", feature = "tokio"))]
+#[cfg(feature = "__https")]
 use crate::h2::{HttpsClientConnect, HttpsClientStream};
 #[cfg(all(feature = "__h3", feature = "tokio"))]
 use crate::h3::{H3ClientConnect, H3ClientStream};
@@ -70,7 +70,7 @@ pub enum Connecting<P: RuntimeProvider> {
             P,
         >,
     ),
-    #[cfg(all(feature = "__https", feature = "tokio"))]
+    #[cfg(feature = "__https")]
     Https(DnsExchangeConnect<HttpsClientConnect<P>, HttpsClientStream, P>),
     #[cfg(all(feature = "__quic", feature = "tokio"))]
     Quic(DnsExchangeConnect<QuicClientConnect, QuicClientStream, P>),
