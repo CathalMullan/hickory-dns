@@ -37,6 +37,7 @@ std = [
     "thiserror/std",
     "tracing/std",
     "url/std",
+    "dep:tokio",
 ]
 
 tls-aws-lc-rs = ["tokio-rustls?/aws-lc-rs", "rustls/aws_lc_rs", "__tls"]
@@ -50,7 +51,7 @@ quic-ring = ["quinn/rustls-ring", "tls-ring", "__quic"]
 h3-ring = ["quic-ring", "__h3"]
 
 __tls = ["dep:bytes", "dep:rustls", "dep:rustls-pki-types", "std"]
-__https = ["dep:bytes", "dep:h2", "dep:http", "std", "tokio"]
+__https = ["dep:bytes", "dep:h2", "dep:http", "std"]
 __quic = ["dep:bytes", "dep:pin-project-lite", "dep:quinn", "std", "tokio"]
 __h3 = ["dep:h3", "dep:h3-quinn", "dep:http", "std", "tokio"]
 
@@ -62,7 +63,7 @@ __dnssec = ["dep:bitflags", "dep:rustls-pki-types", "dep:time", "std"]
 testing = ["std"]
 
 text-parsing = ["std"]
-tokio = ["dep:tokio", "dep:tokio-rustls", "std", "tokio/net", "tokio/rt", "tokio/time", "tokio/rt-multi-thread"]
+tokio = ["dep:tokio-rustls", "std", "tokio/net", "tokio/rt", "tokio/time", "tokio/rt-multi-thread"]
 default = ["std", "tokio"]
 
 serde = ["dep:serde", "std", "url/serde"]

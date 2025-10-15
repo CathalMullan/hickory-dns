@@ -2152,12 +2152,12 @@ mod opportunistic_enc_tests {
     struct MockSyncHandle;
 
     impl Spawn for MockSyncHandle {
-        fn spawn_bg<F>(&mut self, future: F)
+        fn spawn<F>(&mut self, future: F)
         where
-            F: Future<Output = Result<(), ProtoError>> + Send + 'static,
+            F: Future + Send + 'static,
+            F::Output: Send + 'static,
         {
-            // Instead of spawning the future as a background task, poll it synchronously
-            // until completion.
+            // Poll the future synchronously until completion.
             let waker = futures_util::task::noop_waker();
             let mut context = Context::from_waker(&waker);
             let mut future = Box::pin(future);
@@ -2168,6 +2168,13 @@ mod opportunistic_enc_tests {
                     Poll::Pending => continue,
                 }
             }
+        }
+
+        fn spawn_bg<F>(&mut self, future: F)
+        where
+            F: Future<Output = Result<(), ProtoError>> + Send + 'static,
+        {
+            self.spawn(future)
         }
     }
 }
