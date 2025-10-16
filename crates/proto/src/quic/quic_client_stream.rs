@@ -9,7 +9,7 @@ use alloc::{boxed::Box, sync::Arc};
 use core::{
     fmt::{self, Display},
     future::Future,
-    net::SocketAddr,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     pin::Pin,
     task::{Context, Poll},
 };
@@ -22,14 +22,16 @@ use futures_util::{
 use quinn::{
     ClientConfig, Connection, Endpoint, TransportConfig, VarInt, crypto::rustls::QuicClientConfig,
 };
-use tokio::time::timeout;
 
 use crate::{
     error::ProtoError,
     op::{DnsRequest, DnsResponse},
-    quic::quic_stream::{DoqErrorCode, QuicStream},
+    quic::{
+        quic_runtime::{QuinnRuntimeAdapter, QuinnSocketAdapter},
+        quic_stream::{DoqErrorCode, QuicStream},
+    },
+    runtime::{RuntimeProvider, Time},
     rustls::client_config,
-    udp::UdpSocket,
     xfer::{CONNECT_TIMEOUT, DnsRequestSender, DnsResponseStream},
 };
 
@@ -53,8 +55,17 @@ impl Display for QuicClientStream {
 
 impl QuicClientStream {
     /// Builder for QuicClientStream
-    pub fn builder() -> QuicClientStreamBuilder {
-        QuicClientStreamBuilder::default()
+    pub fn builder<P: RuntimeProvider>(provider: P) -> QuicClientStreamBuilder<P> {
+        let mut transport_config = quic_config::transport();
+        // clients never accept new bidirectional streams
+        transport_config.max_concurrent_bidi_streams(VarInt::from_u32(0));
+
+        QuicClientStreamBuilder {
+            crypto_config: None,
+            transport_config: Arc::new(transport_config),
+            bind_addr: None,
+            provider,
+        }
     }
 
     async fn inner_send(
@@ -197,13 +208,14 @@ impl Stream for QuicClientStream {
 
 /// A QUIC connection builder for DNS-over-QUIC
 #[derive(Clone)]
-pub struct QuicClientStreamBuilder {
+pub struct QuicClientStreamBuilder<P: RuntimeProvider> {
+    provider: P,
     crypto_config: Option<rustls::ClientConfig>,
     transport_config: Arc<TransportConfig>,
     bind_addr: Option<SocketAddr>,
 }
 
-impl QuicClientStreamBuilder {
+impl<P: RuntimeProvider> QuicClientStreamBuilder<P> {
     /// Constructs a new TlsStreamBuilder with the associated ClientConfig
     pub fn crypto_config(mut self, crypto_config: rustls::ClientConfig) -> Self {
         self.crypto_config = Some(crypto_config);
@@ -229,7 +241,7 @@ impl QuicClientStreamBuilder {
     /// Create a QuicStream with existing connection
     pub fn build_with_future(
         self,
-        socket: Arc<dyn quinn::AsyncUdpSocket>,
+        socket: P::Udp,
         name_server: SocketAddr,
         server_name: Arc<str>,
     ) -> QuicClientConnect {
@@ -238,16 +250,18 @@ impl QuicClientStreamBuilder {
 
     async fn connect_with_future(
         self,
-        socket: Arc<dyn quinn::AsyncUdpSocket>,
+        socket: P::Udp,
         name_server: SocketAddr,
         server_name: Arc<str>,
     ) -> Result<QuicClientStream, io::Error> {
+        let socket = Arc::new(QuinnSocketAdapter::new(socket)?);
+
         let endpoint_config = quic_config::endpoint();
         let endpoint = Endpoint::new_with_abstract_socket(
             endpoint_config,
             None,
             socket,
-            Arc::new(quinn::TokioRuntime),
+            Arc::new(QuinnRuntimeAdapter::new(self.provider.clone())),
         )?;
         self.connect_inner(endpoint, name_server, server_name).await
     }
@@ -257,16 +271,24 @@ impl QuicClientStreamBuilder {
         name_server: SocketAddr,
         server_name: Arc<str>,
     ) -> Result<QuicClientStream, io::Error> {
-        let connect = if let Some(bind_addr) = self.bind_addr {
-            <tokio::net::UdpSocket as UdpSocket>::connect_with_bind(name_server, bind_addr)
-        } else {
-            <tokio::net::UdpSocket as UdpSocket>::connect(name_server)
+        let bind_addr = match self.bind_addr {
+            Some(ba) => ba,
+            None => match name_server {
+                SocketAddr::V4(..) => SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0),
+                SocketAddr::V6(..) => SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0),
+            },
         };
 
-        let socket = connect.await?;
-        let socket = socket.into_std()?;
+        let socket = self.provider.bind_udp(bind_addr, name_server).await?;
+        let socket = Arc::new(QuinnSocketAdapter::new(socket)?);
+
         let endpoint_config = quic_config::endpoint();
-        let endpoint = Endpoint::new(endpoint_config, None, socket, Arc::new(quinn::TokioRuntime))?;
+        let endpoint = Endpoint::new_with_abstract_socket(
+            endpoint_config,
+            None,
+            socket,
+            Arc::new(QuinnRuntimeAdapter::new(self.provider.clone())),
+        )?;
         self.connect_inner(endpoint, name_server, server_name).await
     }
 
@@ -288,7 +310,7 @@ impl QuicClientStreamBuilder {
             })?
         };
 
-        let quic_connection = connect_quic(
+        let quic_connection = connect_quic::<P>(
             name_server,
             server_name.clone(),
             quic_stream::DOQ_ALPN,
@@ -307,7 +329,7 @@ impl QuicClientStreamBuilder {
     }
 }
 
-pub(crate) async fn connect_quic(
+pub(crate) async fn connect_quic<P: RuntimeProvider>(
     addr: SocketAddr,
     server_name: Arc<str>,
     protocol: &[u8],
@@ -331,35 +353,23 @@ pub(crate) async fn connect_quic(
     Ok(if early_data_enabled {
         match connecting.into_0rtt() {
             Ok((new_connection, _)) => new_connection,
-            Err(connecting) => connect_with_timeout(connecting).await?,
+            Err(connecting) => connect_with_timeout::<P>(connecting).await?,
         }
     } else {
-        connect_with_timeout(connecting).await?
+        connect_with_timeout::<P>(connecting).await?
     })
 }
 
-async fn connect_with_timeout(connecting: quinn::Connecting) -> Result<Connection, io::Error> {
-    match timeout(CONNECT_TIMEOUT, connecting).await {
+async fn connect_with_timeout<P: RuntimeProvider>(
+    connecting: quinn::Connecting,
+) -> Result<Connection, io::Error> {
+    match P::Timer::timeout(CONNECT_TIMEOUT, connecting).await {
         Ok(Ok(connection)) => Ok(connection),
         Ok(Err(e)) => Err(e.into()),
         Err(_) => Err(io::Error::new(
             io::ErrorKind::TimedOut,
             format!("QUIC handshake timed out after {CONNECT_TIMEOUT:?}",),
         )),
-    }
-}
-
-impl Default for QuicClientStreamBuilder {
-    fn default() -> Self {
-        let mut transport_config = quic_config::transport();
-        // clients never accept new bidirectional streams
-        transport_config.max_concurrent_bidi_streams(VarInt::from_u32(0));
-
-        Self {
-            crypto_config: None,
-            transport_config: Arc::new(transport_config),
-            bind_addr: None,
-        }
     }
 }
 

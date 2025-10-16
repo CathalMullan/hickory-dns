@@ -8,6 +8,10 @@
 use std::future::{Future, ready};
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+#[cfg(any(unix, target_os = "wasi"))]
+use std::os::fd::{AsFd, BorrowedFd};
+#[cfg(windows)]
+use std::os::windows::io::{AsSocket, BorrowedSocket};
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
@@ -68,10 +72,26 @@ impl DnsTcpStream for TcpPlaceholder {
     type Time = TokioTime;
 }
 
-pub struct UdpPlaceholder;
+pub struct UdpPlaceholder {
+    inner: std::net::UdpSocket,
+}
+
+impl UdpPlaceholder {
+    fn new(local_addr: SocketAddr) -> io::Result<Self> {
+        Ok(Self {
+            inner: std::net::UdpSocket::bind(local_addr)?,
+        })
+    }
+}
 
 impl DnsUdpSocket for UdpPlaceholder {
-    type Time = TokioTime;
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.inner.local_addr()
+    }
+
+    fn poll_recv_ready(&self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
 
     fn poll_recv_from(
         &self,
@@ -84,6 +104,10 @@ impl DnsUdpSocket for UdpPlaceholder {
         )))
     }
 
+    fn poll_send_ready(&self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+
     fn poll_send_to(
         &self,
         _cx: &mut Context<'_>,
@@ -91,6 +115,20 @@ impl DnsUdpSocket for UdpPlaceholder {
         _target: SocketAddr,
     ) -> Poll<std::io::Result<usize>> {
         Poll::Ready(Ok(buf.len()))
+    }
+}
+
+#[cfg(any(unix, target_os = "wasi"))]
+impl AsFd for UdpPlaceholder {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.inner.as_fd()
+    }
+}
+
+#[cfg(windows)]
+impl AsSocket for UdpPlaceholder {
+    fn as_socket(&self) -> BorrowedSocket<'_> {
+        self.inner.as_socket()
     }
 }
 
@@ -131,10 +169,14 @@ impl RuntimeProvider for MockRuntimeProvider {
 
     fn bind_udp(
         &self,
-        _local_addr: SocketAddr,
+        local_addr: SocketAddr,
         _server_addr: SocketAddr,
     ) -> Pin<Box<dyn Send + Future<Output = std::io::Result<Self::Udp>>>> {
-        Box::pin(async { Ok(UdpPlaceholder) })
+        Box::pin(async move { UdpPlaceholder::new(local_addr) })
+    }
+
+    fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Self::Udp> {
+        Ok(UdpPlaceholder { inner: socket })
     }
 }
 

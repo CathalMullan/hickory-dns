@@ -9,6 +9,7 @@
 
 mod quic_client_stream;
 mod quic_config;
+pub(crate) mod quic_runtime;
 mod quic_server;
 mod quic_stream;
 

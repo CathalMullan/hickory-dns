@@ -2142,6 +2142,11 @@ mod opportunistic_enc_tests {
         ) -> Pin<Box<dyn Future<Output = std::io::Result<Self::Udp>> + Send>> {
             unimplemented!();
         }
+
+        #[allow(clippy::unimplemented)]
+        fn wrap_udp_socket(&self, _socket: std::net::UdpSocket) -> std::io::Result<Self::Udp> {
+            unimplemented!();
+        }
     }
 
     /// `MockSyncHandle` is a `Spawn` implementation that polls task futures synchronously.

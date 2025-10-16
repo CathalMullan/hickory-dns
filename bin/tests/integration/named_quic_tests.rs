@@ -53,8 +53,9 @@ fn test_example_quic_toml_startup() {
             .with_root_certificates(root_store)
             .with_no_client_auth();
 
+        let provider = TokioRuntimeProvider::new();
         let client = Client::<TokioRuntimeProvider>::connect(
-            QuicClientStream::builder()
+            QuicClientStream::builder(provider)
                 .crypto_config(client_config)
                 .build(addr, Arc::from("ns.example.com")),
         );

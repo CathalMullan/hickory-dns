@@ -428,8 +428,8 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Protocol::Tcp => tcp(opts, provider).await?,
         Protocol::Tls => tls(opts, provider).await?,
         Protocol::Https => https(opts, provider).await?,
-        Protocol::Quic => quic(opts).await?,
-        Protocol::H3 => h3(opts).await?,
+        Protocol::Quic => quic(opts, provider).await?,
+        Protocol::H3 => h3(opts, provider).await?,
     };
 
     Ok(())
@@ -561,12 +561,18 @@ async fn https<P: RuntimeProvider>(
 }
 
 #[cfg(not(feature = "__quic"))]
-async fn quic(_opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
+async fn quic<P: RuntimeProvider>(
+    _opts: Opts,
+    _provider: P,
+) -> Result<(), Box<dyn std::error::Error>> {
     panic!("`quic-aws-lc-rs` or `quic-ring` feature is required during compilation");
 }
 
 #[cfg(feature = "__quic")]
-async fn quic(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
+async fn quic<P: RuntimeProvider>(
+    opts: Opts,
+    provider: P,
+) -> Result<(), Box<dyn std::error::Error>> {
     use hickory_proto::quic::QuicClientStream;
 
     let nameserver = opts.nameserver;
@@ -585,8 +591,8 @@ async fn quic(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
     }
     config.alpn_protocols.push(alpn);
 
-    let (client, bg) = Client::<TokioRuntimeProvider>::connect(
-        QuicClientStream::builder()
+    let (client, bg) = Client::<P>::connect(
+        QuicClientStream::builder(provider)
             .crypto_config(config)
             .build(nameserver, Arc::from(dns_name)),
     )
@@ -600,12 +606,15 @@ async fn quic(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[cfg(not(feature = "__h3"))]
-async fn h3(_opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
+async fn h3<P: RuntimeProvider>(
+    _opts: Opts,
+    _provider: P,
+) -> Result<(), Box<dyn std::error::Error>> {
     panic!("`h3-aws-lc-rs` or `h3-ring` feature is required during compilation");
 }
 
 #[cfg(feature = "__h3")]
-async fn h3(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
+async fn h3<P: RuntimeProvider>(opts: Opts, provider: P) -> Result<(), Box<dyn std::error::Error>> {
     use hickory_proto::h3::H3ClientStream;
 
     let nameserver = opts.nameserver;
@@ -627,12 +636,10 @@ async fn h3(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
     }
     config.alpn_protocols.push(alpn);
 
-    let (client, bg) = Client::<TokioRuntimeProvider>::connect(
-        H3ClientStream::builder().crypto_config(config).build(
-            nameserver,
-            Arc::from(dns_name),
-            Arc::from(http_endpoint),
-        ),
+    let (client, bg) = Client::<P>::connect(
+        H3ClientStream::builder(provider)
+            .crypto_config(config)
+            .build(nameserver, Arc::from(dns_name), Arc::from(http_endpoint)),
     )
     .await?;
 
