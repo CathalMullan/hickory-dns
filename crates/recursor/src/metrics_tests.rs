@@ -1,3 +1,7 @@
+#[cfg(any(unix, target_os = "wasi"))]
+use std::os::fd::{AsFd, BorrowedFd};
+#[cfg(windows)]
+use std::os::windows::io::{AsSocket, BorrowedSocket};
 use std::{
     cmp,
     collections::{HashMap, VecDeque},
@@ -265,13 +269,39 @@ impl RuntimeProvider for MockProvider {
         _local_addr: SocketAddr,
         _server_addr: SocketAddr,
     ) -> Pin<Box<dyn Future<Output = io::Result<Self::Udp>> + Send>> {
-        Box::pin(ready(Ok(MockUdpSocket::new(self.handler.clone()))))
+        Box::pin(ready(MockUdpSocket::new(self.handler.clone())))
+    }
+
+    fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Self::Udp> {
+        Ok(MockUdpSocket {
+            socket,
+            inner: Mutex::new(MockUdpSocketInner {
+                incoming_datagrams: VecDeque::new(),
+                waker: None,
+            }),
+            handler: self.handler.clone(),
+        })
     }
 }
 
 struct MockUdpSocket {
+    socket: std::net::UdpSocket,
     inner: Mutex<MockUdpSocketInner>,
     handler: Arc<dyn MockHandler + Send + Sync + 'static>,
+}
+
+#[cfg(any(unix, target_os = "wasi"))]
+impl AsFd for MockUdpSocket {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.socket.as_fd()
+    }
+}
+
+#[cfg(windows)]
+impl AsSocket for MockUdpSocket {
+    fn as_socket(&self) -> BorrowedSocket<'_> {
+        self.socket.as_socket()
+    }
 }
 
 struct MockUdpSocketInner {
@@ -282,19 +312,26 @@ struct MockUdpSocketInner {
 }
 
 impl MockUdpSocket {
-    fn new(handler: Arc<dyn MockHandler + Send + Sync + 'static>) -> Self {
-        Self {
+    fn new(handler: Arc<dyn MockHandler + Send + Sync + 'static>) -> io::Result<Self> {
+        Ok(Self {
+            socket: std::net::UdpSocket::bind("127.0.0.1:0")?,
             inner: Mutex::new(MockUdpSocketInner {
                 incoming_datagrams: VecDeque::new(),
                 waker: None,
             }),
             handler,
-        }
+        })
     }
 }
 
 impl DnsUdpSocket for MockUdpSocket {
-    type Time = TokioTime;
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.socket.local_addr()
+    }
+
+    fn poll_recv_ready(&self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
 
     fn poll_recv_from(
         &self,
@@ -316,6 +353,10 @@ impl DnsUdpSocket for MockUdpSocket {
         };
         buf[..encoded.len()].copy_from_slice(&encoded);
         Poll::Ready(Ok((encoded.len(), socket_addr)))
+    }
+
+    fn poll_send_ready(&self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
     }
 
     fn poll_send_to(
