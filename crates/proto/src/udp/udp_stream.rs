@@ -13,6 +13,10 @@ use core::pin::Pin;
 use core::task::{Context, Poll};
 use std::collections::HashSet;
 use std::io;
+#[cfg(any(unix, target_os = "wasi"))]
+use std::os::fd::AsFd;
+#[cfg(windows)]
+use std::os::windows::io::AsSocket;
 
 use async_trait::async_trait;
 use futures_util::{
@@ -23,18 +27,37 @@ use futures_util::{
 use tracing::{debug, trace, warn};
 
 use crate::op::SerialMessage;
-use crate::runtime::{RuntimeProvider, Time};
+use crate::runtime::RuntimeProvider;
 use crate::udp::MAX_RECEIVE_BUFFER_SIZE;
 use crate::xfer::{BufDnsStreamHandle, StreamReceiver};
+
+/// Platform-specific socket handle access via a marker trait.
+/// Implemented for AsFd on Unix and WASI.
+#[cfg(any(unix, target_os = "wasi"))]
+pub trait DnsUdpSocketHandle: AsFd {}
+
+#[cfg(any(unix, target_os = "wasi"))]
+impl<T: AsFd> DnsUdpSocketHandle for T {}
+
+/// Platform-specific socket handle access via a marker trait.
+/// Implemented for AsSocket on Windows.
+#[cfg(windows)]
+pub trait DnsUdpSocketHandle: AsSocket {}
+
+#[cfg(windows)]
+impl<T: AsSocket> DnsUdpSocketHandle for T {}
 
 /// Trait for DnsUdpSocket
 #[async_trait]
 pub trait DnsUdpSocket
 where
-    Self: Send + Sync + Sized + Unpin,
+    Self: Send + Sync + Sized + Unpin + DnsUdpSocketHandle,
 {
-    /// Time implementation used for this type
-    type Time: Time;
+    /// Returns the local address that this socket is bound to.
+    fn local_addr(&self) -> io::Result<SocketAddr>;
+
+    /// Poll for read readiness.
+    fn poll_recv_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>>;
 
     /// Poll once Receive data from the socket and returns the number of bytes read and the address from
     /// where the data came on success.
@@ -50,6 +73,9 @@ where
         poll_fn(|cx| self.poll_recv_from(cx, buf)).await
     }
 
+    /// Poll for write readiness.
+    fn poll_send_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>>;
+
     /// Poll once to send data to the given address.
     fn poll_send_to(
         &self,
@@ -62,19 +88,6 @@ where
     async fn send_to(&self, buf: &[u8], target: SocketAddr) -> io::Result<usize> {
         poll_fn(|cx| self.poll_send_to(cx, buf, target)).await
     }
-}
-
-/// Trait for UdpSocket
-#[async_trait]
-pub trait UdpSocket: DnsUdpSocket {
-    /// setups up a "client" udp connection that will only receive packets from the associated address
-    async fn connect(addr: SocketAddr) -> io::Result<Self>;
-
-    /// same as connect, but binds to the specified local address for sending address
-    async fn connect_with_bind(addr: SocketAddr, bind_addr: SocketAddr) -> io::Result<Self>;
-
-    /// a "server" UDP socket, that bind to the local listening address, and unbound remote address (can receive from anything)
-    async fn bind(addr: SocketAddr) -> io::Result<Self>;
 }
 
 /// A UDP stream of DNS binary packets
@@ -346,38 +359,14 @@ const ATTEMPT_RANDOM: usize = 10;
 
 #[cfg(feature = "tokio")]
 #[async_trait]
-impl UdpSocket for tokio::net::UdpSocket {
-    /// sets up up a "client" udp connection that will only receive packets from the associated address
-    ///
-    /// if the addr is ipv4 then it will bind local addr to 0.0.0.0:0, ipv6 \[::\]0
-    async fn connect(addr: SocketAddr) -> io::Result<Self> {
-        let bind_addr: SocketAddr = match addr {
-            SocketAddr::V4(_addr) => (Ipv4Addr::UNSPECIFIED, 0).into(),
-            SocketAddr::V6(_addr) => (Ipv6Addr::UNSPECIFIED, 0).into(),
-        };
-
-        Self::connect_with_bind(addr, bind_addr).await
-    }
-
-    /// same as connect, but binds to the specified local address for sending address
-    async fn connect_with_bind(_addr: SocketAddr, bind_addr: SocketAddr) -> io::Result<Self> {
-        let socket = Self::bind(bind_addr).await?;
-
-        // TODO: research connect more, it appears to break UDP receiving tests, etc...
-        // socket.connect(addr).await?;
-
-        Ok(socket)
-    }
-
-    async fn bind(addr: SocketAddr) -> io::Result<Self> {
-        Self::bind(addr).await
-    }
-}
-
-#[cfg(feature = "tokio")]
-#[async_trait]
 impl DnsUdpSocket for tokio::net::UdpSocket {
-    type Time = crate::runtime::TokioTime;
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.local_addr()
+    }
+
+    fn poll_recv_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Self::poll_recv_ready(self, cx)
+    }
 
     fn poll_recv_from(
         &self,
@@ -389,6 +378,10 @@ impl DnsUdpSocket for tokio::net::UdpSocket {
         let len = buf.filled().len();
 
         Poll::Ready(Ok((len, addr)))
+    }
+
+    fn poll_send_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Self::poll_send_ready(self, cx)
     }
 
     fn poll_send_to(
