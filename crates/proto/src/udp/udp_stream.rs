@@ -184,7 +184,7 @@ impl<P: RuntimeProvider> UdpStream<P> {
         (stream, message_sender)
     }
 
-    #[cfg(all(feature = "tokio", feature = "mdns"))]
+    #[cfg(feature = "mdns")]
     pub(crate) fn from_parts(socket: P::Udp, outbound_messages: StreamReceiver) -> Self {
         Self {
             socket,
