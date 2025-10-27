@@ -10,7 +10,8 @@ use {
     hickory_resolver::{
         ConnectionProvider, Resolver,
         config::{GOOGLE, ResolverConfig},
-        proto::runtime::{RuntimeProvider, TokioHandle, TokioTime, iocompat::AsyncIoTokioAsStd},
+        proto::runtime::RuntimeProvider,
+        proto::runtime::tokio_runtime::{AsyncIoTokioAsStd, TokioHandle, TokioTime},
     },
     rustls::{ClientConfig, pki_types::ServerName},
     std::future::Future,

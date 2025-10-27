@@ -33,7 +33,7 @@ use hickory_proto::op::{DnsRequest, Edns, Message, Query};
 use hickory_proto::rr::Record;
 use hickory_proto::rr::rdata::opt::{EdnsCode, EdnsOption};
 use hickory_proto::rr::{DNSClass, Name, RData, RecordType, rdata::A};
-use hickory_proto::runtime::TokioRuntimeProvider;
+use hickory_proto::runtime::tokio_runtime::TokioRuntimeProvider;
 use hickory_proto::tcp::TcpClientStream;
 use hickory_proto::udp::UdpClientStream;
 #[cfg(all(feature = "__dnssec", feature = "sqlite"))]

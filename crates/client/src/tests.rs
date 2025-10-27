@@ -18,7 +18,7 @@ async fn readme_example() {
     use crate::client::{Client, ClientHandle};
     use crate::proto::op::DnsResponse;
     use crate::proto::rr::{DNSClass, Name, Record, RecordType};
-    use crate::proto::runtime::TokioRuntimeProvider;
+    use crate::proto::runtime::tokio_runtime::TokioRuntimeProvider;
     use crate::proto::udp::UdpClientStream;
 
     let address = SocketAddr::from(([8, 8, 8, 8], 53));

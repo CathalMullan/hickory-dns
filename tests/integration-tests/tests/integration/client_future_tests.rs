@@ -20,7 +20,7 @@ use hickory_proto::{
         DNSClass, Name, RecordSet, RecordType,
         rdata::opt::{EdnsCode, EdnsOption},
     },
-    runtime::TokioRuntimeProvider,
+    runtime::tokio_runtime::TokioRuntimeProvider,
     tcp::TcpClientStream,
     udp::UdpClientStream,
     xfer::FirstAnswer,
@@ -29,7 +29,7 @@ use hickory_proto::{
 use hickory_proto::{
     dnssec::{Algorithm, SigSigner, SigningKey, crypto::RsaSigningKey, rdata::DNSSECRData},
     rr::{RData, Record, rdata::A},
-    runtime::TokioTime,
+    runtime::tokio_runtime::TokioTime,
     xfer::{DnsExchangeBackground, DnsMultiplexer},
 };
 #[cfg(all(feature = "__dnssec", feature = "sqlite"))]

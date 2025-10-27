@@ -357,43 +357,6 @@ impl<P: RuntimeProvider> Future for NextRandomUdpSocket<P> {
 
 const ATTEMPT_RANDOM: usize = 10;
 
-#[cfg(feature = "tokio")]
-#[async_trait]
-impl DnsUdpSocket for tokio::net::UdpSocket {
-    fn local_addr(&self) -> io::Result<SocketAddr> {
-        self.local_addr()
-    }
-
-    fn poll_recv_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Self::poll_recv_ready(self, cx)
-    }
-
-    fn poll_recv_from(
-        &self,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<io::Result<(usize, SocketAddr)>> {
-        let mut buf = tokio::io::ReadBuf::new(buf);
-        let addr = ready!(Self::poll_recv_from(self, cx, &mut buf))?;
-        let len = buf.filled().len();
-
-        Poll::Ready(Ok((len, addr)))
-    }
-
-    fn poll_send_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Self::poll_send_ready(self, cx)
-    }
-
-    fn poll_send_to(
-        &self,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-        target: SocketAddr,
-    ) -> Poll<io::Result<usize>> {
-        Self::poll_send_to(self, cx, buf, target)
-    }
-}
-
 #[cfg(test)]
 #[cfg(feature = "tokio")]
 mod tests {
@@ -402,7 +365,7 @@ mod tests {
     use test_support::subscribe;
 
     use crate::{
-        runtime::TokioRuntimeProvider,
+        runtime::tokio_runtime::TokioRuntimeProvider,
         udp::tests::{next_random_socket_test, udp_stream_test},
     };
 

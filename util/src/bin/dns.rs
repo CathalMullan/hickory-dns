@@ -43,7 +43,7 @@ use hickory_proto::{
     ProtoError,
     op::DnsResponse,
     rr::{DNSClass, Name, RData, RecordSet, RecordType},
-    runtime::{RuntimeProvider, TokioRuntimeProvider},
+    runtime::{RuntimeProvider, tokio_runtime::TokioRuntimeProvider},
     serialize::txt::RDataParser,
     tcp::TcpClientStream,
     udp::UdpClientStream,

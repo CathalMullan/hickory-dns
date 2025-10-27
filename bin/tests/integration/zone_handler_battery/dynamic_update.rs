@@ -19,7 +19,7 @@ use hickory_proto::{
         DNSClass, Name, RData, Record, RecordSet, RecordType,
         rdata::{A as A4, AAAA},
     },
-    runtime::{Time, TokioTime},
+    runtime::{Time, tokio_runtime::TokioTime},
     serialize::binary::BinEncodable,
     xfer::Protocol,
 };

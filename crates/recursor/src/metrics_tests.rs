@@ -22,7 +22,10 @@ use hickory_proto::{
         RData, Record, RecordType,
         rdata::{A, NS},
     },
-    runtime::{RuntimeProvider, TokioHandle, TokioTime},
+    runtime::{
+        RuntimeProvider,
+        tokio_runtime::{TokioHandle, TokioTime},
+    },
     serialize::binary::BinDecodable,
     tcp::DnsTcpStream,
     udp::DnsUdpSocket,
@@ -260,7 +263,7 @@ impl RuntimeProvider for MockProvider {
         _server_name: ServerName<'static>,
         _client_config: Arc<ClientConfig>,
     ) -> Pin<Box<dyn Future<Output = io::Result<Self::Tls>> + Send>> {
-        // See `proto::runtime::TokioRuntimeProvider` for the actual implementation
+        // See `proto::runtime::tokio_runtime::TokioRuntimeProvider` for the actual implementation
         unreachable!("TLS not used by this implementation")
     }
 

@@ -4,7 +4,7 @@ use hickory_integration::TestResponseHandler;
 use hickory_proto::{
     op::{Message, MessageType, Query, ResponseCode, ResponseSigner},
     rr::{LowerName, Name, RData, Record, RecordSet, RecordType, rdata::A},
-    runtime::{Time, TokioTime},
+    runtime::{Time, tokio_runtime::TokioTime},
     serialize::binary::BinEncodable,
     xfer::Protocol,
 };

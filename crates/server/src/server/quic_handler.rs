@@ -9,7 +9,7 @@ use std::{io, net::SocketAddr, sync::Arc};
 
 use bytes::Bytes;
 use futures_util::lock::Mutex;
-use hickory_proto::runtime::TokioRuntimeProvider;
+use hickory_proto::runtime::tokio_runtime::TokioRuntimeProvider;
 use rustls::server::ResolvesServerCert;
 use tokio::{net, task::JoinSet};
 use tracing::{debug, error, warn};

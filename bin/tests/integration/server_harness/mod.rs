@@ -27,7 +27,7 @@ use hickory_proto::{
     xfer::Protocol,
 };
 #[cfg(feature = "__dnssec")]
-use hickory_proto::{dnssec::Algorithm, runtime::TokioRuntimeProvider};
+use hickory_proto::{dnssec::Algorithm, runtime::tokio_runtime::TokioRuntimeProvider};
 
 #[derive(Debug, Default)]
 pub struct SocketPort {

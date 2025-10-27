@@ -62,7 +62,7 @@
 //! use std::net::*;
 //! use tokio::runtime::Runtime;
 //! use hickory_resolver::Resolver;
-//! use hickory_resolver::proto::runtime::TokioRuntimeProvider;
+//! use hickory_resolver::proto::runtime::tokio_runtime::TokioRuntimeProvider;
 //! use hickory_resolver::config::*;
 //!
 //! // We need a Tokio Runtime to run the resolver
@@ -100,7 +100,7 @@
 //! # use std::net::TcpStream;
 //! # use tokio::runtime::Runtime;
 //! # use hickory_resolver::Resolver;
-//! # use hickory_resolver::proto::runtime::TokioRuntimeProvider;
+//! # use hickory_resolver::proto::runtime::tokio_runtime::TokioRuntimeProvider;
 //! # use hickory_resolver::config::ResolverConfig;
 //! #
 //! # let mut io_loop = Runtime::new().unwrap();
@@ -151,7 +151,7 @@
 //! # #[cfg(feature = "tokio")]
 //! # {
 //! use hickory_resolver::Resolver;
-//! use hickory_resolver::proto::runtime::TokioRuntimeProvider;
+//! use hickory_resolver::proto::runtime::tokio_runtime::TokioRuntimeProvider;
 //! use hickory_resolver::config::*;
 //!
 //! // Construct a new Resolver with default configuration options

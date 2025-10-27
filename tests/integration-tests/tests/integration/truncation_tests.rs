@@ -3,7 +3,7 @@ use hickory_proto::DnsHandle;
 use hickory_proto::op::{DnsRequest, Edns, Message, Query};
 use hickory_proto::rr::rdata::{A, SOA};
 use hickory_proto::rr::{DNSClass, Name, RData, Record, RecordSet, RecordType, RrKey};
-use hickory_proto::runtime::TokioRuntimeProvider;
+use hickory_proto::runtime::tokio_runtime::TokioRuntimeProvider;
 use hickory_proto::udp::UdpClientStream;
 use hickory_proto::xfer::FirstAnswer;
 use hickory_server::Server;

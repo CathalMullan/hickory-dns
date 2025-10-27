@@ -23,7 +23,7 @@ use crate::{
     proto::{
         access_control::{AccessControlSet, AccessControlSetBuilder},
         op::{Message, Query},
-        runtime::TokioRuntimeProvider,
+        runtime::tokio_runtime::TokioRuntimeProvider,
     },
     recursor_dns_handle::RecursorDnsHandle,
     resolver::{ConnectionProvider, TlsConfig, TtlConfig, config::OpportunisticEncryption},

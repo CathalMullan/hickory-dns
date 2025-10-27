@@ -22,7 +22,7 @@ use crate::{
     proto::{
         op::ResponseSigner,
         rr::{LowerName, Name, RecordType},
-        runtime::TokioRuntimeProvider,
+        runtime::tokio_runtime::TokioRuntimeProvider,
     },
     resolver::{
         ConnectionProvider, Resolver,

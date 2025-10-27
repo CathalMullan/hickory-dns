@@ -410,12 +410,11 @@ async fn send_serial_message_inner<S: DnsUdpSocket + Send>(
     Err("udp receive attempts exceeded".into())
 }
 
-#[cfg(test)]
-#[cfg(feature = "tokio")]
+#[cfg(all(test, feature = "tokio"))]
 mod tests {
     #![allow(clippy::dbg_macro, clippy::print_stdout)]
     use crate::{
-        runtime::TokioRuntimeProvider,
+        runtime::tokio_runtime::TokioRuntimeProvider,
         udp::tests::{
             udp_client_stream_bad_id_test, udp_client_stream_response_limit_test,
             udp_client_stream_test,

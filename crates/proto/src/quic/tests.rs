@@ -26,7 +26,7 @@ use crate::{
     op::{Message, Query},
     quic::QuicClientStream,
     rr::{Name, RecordType},
-    runtime::TokioRuntimeProvider,
+    runtime::tokio_runtime::TokioRuntimeProvider,
     rustls::default_provider,
     xfer::DnsRequestSender,
 };

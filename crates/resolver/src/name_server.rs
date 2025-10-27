@@ -965,7 +965,7 @@ mod tests {
     use crate::proto::op::{DnsRequest, DnsRequestOptions, Message, Query, ResponseCode};
     use crate::proto::rr::rdata::NULL;
     use crate::proto::rr::{Name, RData, Record, RecordType};
-    use crate::proto::runtime::TokioRuntimeProvider;
+    use crate::proto::runtime::tokio_runtime::TokioRuntimeProvider;
 
     #[tokio::test]
     async fn test_name_server() {
@@ -1259,6 +1259,7 @@ mod opportunistic_enc_tests {
 
     use futures_util::stream::once;
     use futures_util::{Stream, future};
+    use hickory_proto::runtime::tokio_runtime::{AsyncIoTokioAsStd, TokioTime};
     #[cfg(feature = "metrics")]
     use metrics::{Key, KeyName, Label, SharedString, Unit, with_local_recorder};
     #[cfg(feature = "metrics")]
@@ -1272,8 +1273,7 @@ mod opportunistic_enc_tests {
     #[cfg(feature = "metrics")]
     use crate::proto::ProtoErrorKind;
     use crate::proto::op::{DnsRequest, DnsResponse, Message, ResponseCode};
-    use crate::proto::runtime::iocompat::AsyncIoTokioAsStd;
-    use crate::proto::runtime::{RuntimeProvider, Spawn, TokioTime};
+    use crate::proto::runtime::{RuntimeProvider, Spawn};
     use crate::proto::xfer::Protocol;
     use crate::proto::{DnsHandle, ProtoError};
 

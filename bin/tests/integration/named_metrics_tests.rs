@@ -28,7 +28,7 @@ use hickory_proto::rr::RData::PTR;
 use hickory_proto::rr::Record;
 use hickory_proto::rr::rdata::A;
 use hickory_proto::rr::{DNSClass, Name, RData, RecordType};
-use hickory_proto::runtime::TokioRuntimeProvider;
+use hickory_proto::runtime::tokio_runtime::TokioRuntimeProvider;
 use hickory_proto::tcp::TcpClientStream;
 use hickory_proto::xfer::Protocol;
 #[cfg(feature = "blocklist")]

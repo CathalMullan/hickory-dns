@@ -101,7 +101,7 @@ mod test {
         ProtoError,
         op::{DnsRequest, DnsResponse, Message, MessageType, OpCode, Query},
         rr::RecordType,
-        runtime::TokioRuntimeProvider,
+        runtime::tokio_runtime::TokioRuntimeProvider,
         xfer::{DnsHandle, FirstAnswer},
     };
     use test_support::subscribe;

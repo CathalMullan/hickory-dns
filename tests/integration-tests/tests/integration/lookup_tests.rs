@@ -8,7 +8,7 @@ use hickory_proto::{
     DnsError,
     op::{DnsResponse, Query},
     rr::{DNSClass, Name, RData, Record, RecordType, rdata::A},
-    runtime::TokioRuntimeProvider,
+    runtime::tokio_runtime::TokioRuntimeProvider,
     xfer::{DnsExchange, DnsMultiplexer},
 };
 use hickory_resolver::{

@@ -380,14 +380,13 @@ impl<S: DnsTcpStream> Stream for TcpStream<S> {
     }
 }
 
-#[cfg(test)]
-#[cfg(feature = "tokio")]
+#[cfg(all(test, feature = "tokio"))]
 mod tests {
     use core::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
     use test_support::subscribe;
 
-    use crate::runtime::TokioRuntimeProvider;
+    use crate::runtime::tokio_runtime::TokioRuntimeProvider;
     use crate::tcp::tests::tcp_stream_test;
 
     #[tokio::test]

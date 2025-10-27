@@ -16,7 +16,7 @@ use tokio::runtime::Runtime;
 use crate::server_harness::{named_test_harness, query_a};
 use hickory_client::client::Client;
 use hickory_proto::quic::QuicClientStream;
-use hickory_proto::runtime::TokioRuntimeProvider;
+use hickory_proto::runtime::tokio_runtime::TokioRuntimeProvider;
 use hickory_proto::rustls::default_provider;
 use hickory_proto::xfer::Protocol;
 use test_support::subscribe;

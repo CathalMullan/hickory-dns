@@ -123,7 +123,7 @@ mod test {
     use super::*;
     use crate::error::ProtoError;
     use crate::op::Message;
-    use crate::runtime::TokioRuntimeProvider;
+    use crate::runtime::tokio_runtime::TokioRuntimeProvider;
     use crate::xfer::{DnsHandle, DnsRequest, DnsResponse, FirstAnswer};
     use test_support::subscribe;
 

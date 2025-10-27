@@ -20,10 +20,6 @@ use crate::BufDnsStreamHandle;
 use crate::error::ProtoError;
 use crate::op::SerialMessage;
 use crate::runtime::RuntimeProvider;
-#[cfg(feature = "tokio")]
-use crate::runtime::TokioTime;
-#[cfg(feature = "tokio")]
-use crate::runtime::iocompat::AsyncIoTokioAsStd;
 use crate::tcp::{DnsTcpStream, TcpStream};
 use crate::xfer::DnsClientStream;
 
@@ -100,22 +96,13 @@ impl<S: DnsTcpStream> Stream for TcpClientStream<S> {
     }
 }
 
-#[cfg(feature = "tokio")]
-impl<T> DnsTcpStream for AsyncIoTokioAsStd<T>
-where
-    T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + Sized + 'static,
-{
-    type Time = TokioTime;
-}
-
-#[cfg(test)]
-#[cfg(feature = "tokio")]
+#[cfg(all(test, feature = "tokio"))]
 mod tests {
     use core::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
     use test_support::subscribe;
 
-    use crate::runtime::TokioRuntimeProvider;
+    use crate::runtime::tokio_runtime::TokioRuntimeProvider;
     use crate::tcp::tests::tcp_client_stream_test;
     #[tokio::test]
     async fn test_tcp_stream_ipv4() {

@@ -6,7 +6,7 @@ use tokio::runtime::Runtime;
 
 use hickory_proto::{
     rr::{Name, RecordType},
-    runtime::TokioRuntimeProvider,
+    runtime::tokio_runtime::TokioRuntimeProvider,
 };
 use hickory_server::{store::forwarder::ForwardZoneHandler, zone_handler::ZoneHandler};
 use test_support::subscribe;

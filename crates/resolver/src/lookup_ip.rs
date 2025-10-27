@@ -330,7 +330,7 @@ pub(crate) mod tests {
     use crate::proto::ProtoError;
     use crate::proto::op::{DnsRequest, DnsResponse, Message};
     use crate::proto::rr::{Name, RData, Record};
-    use crate::proto::runtime::TokioRuntimeProvider;
+    use crate::proto::runtime::tokio_runtime::TokioRuntimeProvider;
     use crate::proto::xfer::DnsHandle;
 
     #[derive(Clone)]

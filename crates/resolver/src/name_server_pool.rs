@@ -545,7 +545,7 @@ mod tests {
     use crate::config::{NameServerConfig, ResolverConfig};
     use crate::proto::op::{DnsRequestOptions, Query};
     use crate::proto::rr::{Name, RecordType};
-    use crate::proto::runtime::TokioRuntimeProvider;
+    use crate::proto::runtime::tokio_runtime::TokioRuntimeProvider;
     use crate::proto::xfer::{DnsHandle, FirstAnswer};
 
     #[ignore]

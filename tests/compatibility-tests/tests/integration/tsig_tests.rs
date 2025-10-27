@@ -22,7 +22,7 @@ use hickory_client::proto::dnssec::TSigner;
 use hickory_client::proto::dnssec::rdata::tsig::TsigAlgorithm;
 use hickory_client::proto::op::{MessageSigner, ResponseCode};
 use hickory_client::proto::rr::{Name, RData, Record, rdata::A};
-use hickory_client::proto::runtime::TokioRuntimeProvider;
+use hickory_client::proto::runtime::tokio_runtime::TokioRuntimeProvider;
 use hickory_client::proto::tcp::TcpClientStream;
 use hickory_client::proto::udp::UdpClientStream;
 use hickory_client::proto::xfer::DnsMultiplexer;

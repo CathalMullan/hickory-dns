@@ -16,10 +16,6 @@ use async_trait::async_trait;
 use rustls::ClientConfig;
 #[cfg(feature = "__tls")]
 use rustls_pki_types::ServerName;
-#[cfg(any(test, feature = "tokio"))]
-use tokio::runtime::Runtime;
-#[cfg(any(test, feature = "tokio"))]
-use tokio::task::JoinHandle;
 
 use crate::error::ProtoError;
 use crate::tcp::DnsTcpStream;
@@ -28,9 +24,9 @@ use crate::udp::DnsUdpSocket;
 /// Spawn a background task, if it was present
 #[cfg(any(test, feature = "tokio"))]
 pub fn spawn_bg<F: Future<Output = R> + Send + 'static, R: Send + 'static>(
-    runtime: &Runtime,
+    runtime: &tokio::runtime::Runtime,
     background: F,
-) -> JoinHandle<R> {
+) -> tokio::task::JoinHandle<R> {
     runtime.spawn(background)
 }
 
@@ -40,55 +36,9 @@ pub mod iocompat {
     use core::pin::Pin;
     use core::task::{Context, Poll};
     use std::io;
-    #[cfg(feature = "tokio")]
-    use std::io::IoSlice;
 
     use futures_io::{AsyncRead, AsyncWrite};
     use tokio::io::{AsyncRead as TokioAsyncRead, AsyncWrite as TokioAsyncWrite, ReadBuf};
-
-    /// Conversion from `tokio::io::{AsyncRead, AsyncWrite}` to `std::io::{AsyncRead, AsyncWrite}`
-    #[cfg(feature = "tokio")]
-    pub struct AsyncIoTokioAsStd<T: TokioAsyncRead + TokioAsyncWrite>(pub T);
-
-    #[cfg(feature = "tokio")]
-    impl<T: TokioAsyncRead + TokioAsyncWrite + Unpin> Unpin for AsyncIoTokioAsStd<T> {}
-    #[cfg(feature = "tokio")]
-    impl<R: TokioAsyncRead + TokioAsyncWrite + Unpin> AsyncRead for AsyncIoTokioAsStd<R> {
-        fn poll_read(
-            mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            buf: &mut [u8],
-        ) -> Poll<io::Result<usize>> {
-            let mut buf = ReadBuf::new(buf);
-            let polled = Pin::new(&mut self.0).poll_read(cx, &mut buf);
-
-            polled.map_ok(|_| buf.filled().len())
-        }
-    }
-
-    #[cfg(feature = "tokio")]
-    impl<W: TokioAsyncRead + TokioAsyncWrite + Unpin> AsyncWrite for AsyncIoTokioAsStd<W> {
-        fn poll_write(
-            mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            buf: &[u8],
-        ) -> Poll<io::Result<usize>> {
-            Pin::new(&mut self.0).poll_write(cx, buf)
-        }
-        fn poll_write_vectored(
-            mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            bufs: &[IoSlice<'_>],
-        ) -> Poll<io::Result<usize>> {
-            Pin::new(&mut self.0).poll_write_vectored(cx, bufs)
-        }
-        fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-            Pin::new(&mut self.0).poll_flush(cx)
-        }
-        fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-            Pin::new(&mut self.0).poll_shutdown(cx)
-        }
-    }
 
     /// Conversion from `std::io::{AsyncRead, AsyncWrite}` to `tokio::io::{AsyncRead, AsyncWrite}`
     pub struct AsyncIoStdAsTokio<T: AsyncRead + AsyncWrite>(pub T);
@@ -128,21 +78,37 @@ pub mod iocompat {
     }
 }
 
+#[allow(missing_docs)]
 #[cfg(feature = "tokio")]
-#[allow(unreachable_pub)]
-mod tokio_runtime {
+pub mod tokio_runtime {
     use alloc::sync::Arc;
+    use core::task::{Context, Poll, ready};
+    use std::io::IoSlice;
     use std::sync::Mutex;
 
-    use tokio::net::{TcpSocket, TcpStream, UdpSocket as TokioUdpSocket};
-    use tokio::task::JoinSet;
-    use tokio::time::timeout;
+    use futures_io::{AsyncRead, AsyncWrite};
+    use tokio::io::{AsyncRead as TokioAsyncRead, AsyncWrite as TokioAsyncWrite, ReadBuf};
+    use tokio::{
+        net::{TcpSocket, TcpStream, UdpSocket as TokioUdpSocket},
+        runtime::Runtime,
+        task::JoinSet,
+        time::timeout,
+    };
     #[cfg(feature = "__tls")]
     use tokio_rustls::{TlsConnector, client::TlsStream};
 
-    use super::iocompat::AsyncIoTokioAsStd;
     use super::*;
     use crate::xfer::CONNECT_TIMEOUT;
+
+    impl Executor for Runtime {
+        fn new() -> Self {
+            Self::new().expect("failed to create tokio runtime")
+        }
+
+        fn block_on<F: Future>(&mut self, future: F) -> F::Output {
+            Self::block_on(self, future)
+        }
+    }
 
     /// A handle to the Tokio runtime
     #[derive(Clone, Default)]
@@ -167,6 +133,11 @@ mod tokio_runtime {
             join_set.spawn(future);
             reap_tasks(&mut join_set);
         }
+    }
+
+    /// Reap finished tasks from a `JoinSet`, without awaiting or blocking.
+    fn reap_tasks(join_set: &mut JoinSet<Result<(), ProtoError>>) {
+        while join_set.try_join_next().is_some() {}
     }
 
     /// The Tokio Runtime for async execution
@@ -245,7 +216,7 @@ mod tokio_runtime {
             local_addr: SocketAddr,
             _server_addr: SocketAddr,
         ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Udp>>>> {
-            Box::pin(tokio::net::UdpSocket::bind(local_addr))
+            Box::pin(TokioUdpSocket::bind(local_addr))
         }
 
         fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Self::Udp> {
@@ -253,14 +224,113 @@ mod tokio_runtime {
         }
     }
 
-    /// Reap finished tasks from a `JoinSet`, without awaiting or blocking.
-    fn reap_tasks(join_set: &mut JoinSet<Result<(), ProtoError>>) {
-        while join_set.try_join_next().is_some() {}
+    #[async_trait]
+    impl DnsUdpSocket for TokioUdpSocket {
+        fn local_addr(&self) -> io::Result<SocketAddr> {
+            self.local_addr()
+        }
+
+        fn poll_recv_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Self::poll_recv_ready(self, cx)
+        }
+
+        fn poll_recv_from(
+            &self,
+            cx: &mut Context<'_>,
+            buf: &mut [u8],
+        ) -> Poll<io::Result<(usize, SocketAddr)>> {
+            let mut buf = ReadBuf::new(buf);
+            let addr = ready!(Self::poll_recv_from(self, cx, &mut buf))?;
+            let len = buf.filled().len();
+            Poll::Ready(Ok((len, addr)))
+        }
+
+        fn poll_send_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Self::poll_send_ready(self, cx)
+        }
+
+        fn poll_send_to(
+            &self,
+            cx: &mut Context<'_>,
+            buf: &[u8],
+            target: SocketAddr,
+        ) -> Poll<io::Result<usize>> {
+            Self::poll_send_to(self, cx, buf, target)
+        }
+    }
+
+    /// New type which is implemented using tokio::time::{Delay, Timeout}
+    #[derive(Clone, Copy, Debug)]
+    pub struct TokioTime;
+
+    #[async_trait]
+    impl Time for TokioTime {
+        async fn delay_for(duration: Duration) {
+            tokio::time::sleep(duration).await
+        }
+
+        async fn timeout<F: 'static + Future + Send>(
+            duration: Duration,
+            future: F,
+        ) -> Result<F::Output, std::io::Error> {
+            tokio::time::timeout(duration, future)
+                .await
+                .map_err(move |_| {
+                    std::io::Error::new(std::io::ErrorKind::TimedOut, "future timed out")
+                })
+        }
+    }
+
+    /// Conversion from `tokio::io::{AsyncRead, AsyncWrite}` to `std::io::{AsyncRead, AsyncWrite}`
+    pub struct AsyncIoTokioAsStd<T: TokioAsyncRead + TokioAsyncWrite>(pub T);
+
+    impl<T: TokioAsyncRead + TokioAsyncWrite + Unpin> Unpin for AsyncIoTokioAsStd<T> {}
+
+    impl<R: TokioAsyncRead + TokioAsyncWrite + Unpin> AsyncRead for AsyncIoTokioAsStd<R> {
+        fn poll_read(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &mut [u8],
+        ) -> Poll<io::Result<usize>> {
+            let mut buf = ReadBuf::new(buf);
+            let polled = Pin::new(&mut self.0).poll_read(cx, &mut buf);
+            polled.map_ok(|_| buf.filled().len())
+        }
+    }
+
+    impl<W: TokioAsyncRead + TokioAsyncWrite + Unpin> AsyncWrite for AsyncIoTokioAsStd<W> {
+        fn poll_write(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<io::Result<usize>> {
+            Pin::new(&mut self.0).poll_write(cx, buf)
+        }
+
+        fn poll_write_vectored(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            bufs: &[IoSlice<'_>],
+        ) -> Poll<io::Result<usize>> {
+            Pin::new(&mut self.0).poll_write_vectored(cx, bufs)
+        }
+
+        fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Pin::new(&mut self.0).poll_flush(cx)
+        }
+
+        fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Pin::new(&mut self.0).poll_shutdown(cx)
+        }
+    }
+
+    impl<T> DnsTcpStream for AsyncIoTokioAsStd<T>
+    where
+        T: TokioAsyncRead + TokioAsyncWrite + Unpin + Send + Sync + Sized + 'static,
+    {
+        type Time = TokioTime;
     }
 }
-
-#[cfg(feature = "tokio")]
-pub use tokio_runtime::{TokioHandle, TokioRuntimeProvider};
 
 /// RuntimeProvider defines which async runtime that handles IO and timers.
 pub trait RuntimeProvider: Clone + Send + Sync + Unpin + 'static {
@@ -340,17 +410,6 @@ pub trait Executor {
     fn block_on<F: Future>(&mut self, future: F) -> F::Output;
 }
 
-#[cfg(feature = "tokio")]
-impl Executor for Runtime {
-    fn new() -> Self {
-        Self::new().expect("failed to create tokio runtime")
-    }
-
-    fn block_on<F: Future>(&mut self, future: F) -> F::Output {
-        Self::block_on(self, future)
-    }
-}
-
 /// Generic Time for Delay and Timeout.
 // This trait is created to allow to use different types of time systems. It's used in Fuchsia OS, please be mindful when update it.
 #[async_trait]
@@ -373,27 +432,5 @@ pub trait Time {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs()
-    }
-}
-
-/// New type which is implemented using tokio::time::{Delay, Timeout}
-#[cfg(any(test, feature = "tokio"))]
-#[derive(Clone, Copy, Debug)]
-pub struct TokioTime;
-
-#[cfg(any(test, feature = "tokio"))]
-#[async_trait]
-impl Time for TokioTime {
-    async fn delay_for(duration: Duration) {
-        tokio::time::sleep(duration).await
-    }
-
-    async fn timeout<F: 'static + Future + Send>(
-        duration: Duration,
-        future: F,
-    ) -> Result<F::Output, std::io::Error> {
-        tokio::time::timeout(duration, future)
-            .await
-            .map_err(move |_| std::io::Error::new(std::io::ErrorKind::TimedOut, "future timed out"))
     }
 }

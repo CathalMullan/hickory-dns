@@ -15,7 +15,7 @@ use crate::server_harness::{named_test_harness, query_a, query_a_refused};
 use hickory_client::client::{Client, ClientHandle};
 use hickory_proto::op::ResponseCode;
 use hickory_proto::rr::{DNSClass, Name, RecordType};
-use hickory_proto::runtime::TokioRuntimeProvider;
+use hickory_proto::runtime::tokio_runtime::TokioRuntimeProvider;
 use hickory_proto::tcp::TcpClientStream;
 use hickory_proto::udp::UdpClientStream;
 use hickory_proto::xfer::Protocol;

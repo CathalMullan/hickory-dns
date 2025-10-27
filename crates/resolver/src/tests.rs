@@ -9,7 +9,7 @@ async fn readme_example() {
 
     use crate::Resolver;
     use crate::config::*;
-    use crate::proto::runtime::TokioRuntimeProvider;
+    use crate::proto::runtime::tokio_runtime::TokioRuntimeProvider;
 
     // Construct a new Resolver with default configuration options
     let resolver = Resolver::builder_with_config(
@@ -36,7 +36,7 @@ async fn readme_example() {
 fn readme_tls() {
     use crate::Resolver;
     use crate::config::*;
-    use crate::proto::runtime::TokioRuntimeProvider;
+    use crate::proto::runtime::tokio_runtime::TokioRuntimeProvider;
 
     // Construct a new Resolver with default configuration options
     let resolver = Resolver::builder_with_config(

@@ -420,7 +420,7 @@ where
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "tokio"))]
 mod test {
     use alloc::{boxed::Box, vec::Vec};
     use core::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -498,7 +498,7 @@ mod test {
     }
 
     impl DnsClientStream for MockClientStream {
-        type Time = crate::runtime::TokioTime;
+        type Time = crate::runtime::tokio_runtime::TokioTime;
 
         fn name_server_addr(&self) -> SocketAddr {
             self.addr

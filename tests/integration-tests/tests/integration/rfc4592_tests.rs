@@ -13,7 +13,7 @@ use hickory_proto::{
         DNSClass, RData, Record, RecordType,
         rdata::{A, MX, NS, SOA, SRV, TXT},
     },
-    runtime::TokioRuntimeProvider,
+    runtime::tokio_runtime::TokioRuntimeProvider,
     udp::UdpClientStream,
 };
 use hickory_resolver::Name;

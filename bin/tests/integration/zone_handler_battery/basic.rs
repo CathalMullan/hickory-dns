@@ -11,7 +11,7 @@ use hickory_proto::{
         Name, RData, Record, RecordType,
         rdata::{A as A4, AAAA},
     },
-    runtime::{Time, TokioTime},
+    runtime::{Time, tokio_runtime::TokioTime},
     xfer::Protocol,
 };
 use hickory_server::{

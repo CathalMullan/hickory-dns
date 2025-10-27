@@ -504,7 +504,7 @@ mod tests {
     use super::*;
     use crate::op::{DnsRequestOptions, Edns, Message, Query};
     use crate::rr::{Name, RecordType};
-    use crate::runtime::TokioRuntimeProvider;
+    use crate::runtime::tokio_runtime::TokioRuntimeProvider;
     use crate::xfer::FirstAnswer;
 
     #[tokio::test]

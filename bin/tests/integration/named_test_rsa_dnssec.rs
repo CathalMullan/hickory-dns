@@ -13,7 +13,8 @@ use futures_util::TryStreamExt;
 use hickory_client::client::Client;
 use hickory_dns::dnssec::key_from_file;
 use hickory_proto::DnsHandle;
-use hickory_proto::runtime::{RuntimeProvider, TokioRuntimeProvider};
+use hickory_proto::runtime::RuntimeProvider;
+use hickory_proto::runtime::tokio_runtime::TokioRuntimeProvider;
 use hickory_proto::tcp::TcpClientStream;
 use hickory_proto::xfer::{DnsExchangeBackground, DnsMultiplexer, Protocol};
 use hickory_proto::{

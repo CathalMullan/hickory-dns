@@ -8,7 +8,7 @@ use futures::{StreamExt, future};
 use hickory_proto::{
     DnsStreamHandle,
     op::{Message, SerialMessage},
-    runtime::iocompat::AsyncIoTokioAsStd,
+    runtime::tokio_runtime::AsyncIoTokioAsStd,
     tcp::TcpStream,
 };
 use tokio::net::{TcpListener, UdpSocket};
@@ -195,7 +195,7 @@ mod test {
     use hickory_client::client::{Client, ClientHandle};
     use hickory_proto::{
         rr::{DNSClass, RData, RecordType, domain::Name, rdata},
-        runtime::TokioRuntimeProvider,
+        runtime::tokio_runtime::TokioRuntimeProvider,
         tcp::TcpClientStream,
         udp::UdpClientStream,
     };

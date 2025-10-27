@@ -12,7 +12,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::{env, io, mem, thread};
 
-use hickory_proto::runtime::TokioRuntimeProvider;
+use hickory_proto::runtime::tokio_runtime::TokioRuntimeProvider;
 use test::Bencher;
 use tokio::runtime::Runtime;
 

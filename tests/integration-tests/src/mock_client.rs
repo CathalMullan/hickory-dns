@@ -26,8 +26,10 @@ use hickory_proto::ProtoError;
 use hickory_proto::op::{DnsRequest, DnsResponse, Message, Query};
 use hickory_proto::rr::rdata::{CNAME, NS, SOA};
 use hickory_proto::rr::{Name, RData, Record};
-use hickory_proto::runtime::TokioTime;
-use hickory_proto::runtime::{RuntimeProvider, TokioHandle};
+use hickory_proto::runtime::{
+    RuntimeProvider,
+    tokio_runtime::{TokioHandle, TokioTime},
+};
 use hickory_proto::tcp::DnsTcpStream;
 use hickory_proto::udp::DnsUdpSocket;
 use hickory_proto::xfer::DnsHandle;
@@ -163,7 +165,7 @@ impl RuntimeProvider for MockRuntimeProvider {
         _server_name: ServerName<'static>,
         _client_config: Arc<ClientConfig>,
     ) -> Pin<Box<dyn Send + Future<Output = std::io::Result<Self::Tls>>>> {
-        // See `proto::runtime::TokioRuntimeProvider` for the actual implementation
+        // See `proto::runtime::tokio_runtime::TokioRuntimeProvider` for the actual implementation
         unreachable!("TLS not used by this implementation")
     }
 

@@ -41,7 +41,7 @@ use hickory_proto::{ProtoError, rr::Name};
 #[cfg(feature = "__dnssec")]
 use hickory_server::dnssec::NxProofKind;
 #[cfg(any(feature = "recursor", feature = "sqlite"))]
-use hickory_server::proto::runtime::TokioRuntimeProvider;
+use hickory_server::proto::runtime::tokio_runtime::TokioRuntimeProvider;
 #[cfg(feature = "blocklist")]
 use hickory_server::store::blocklist::BlocklistConfig;
 #[cfg(feature = "blocklist")]

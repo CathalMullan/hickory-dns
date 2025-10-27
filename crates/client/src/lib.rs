@@ -89,7 +89,7 @@
 //! use std::str::FromStr;
 //! use tokio::net::TcpStream as TokioTcpStream;
 //! use hickory_client::client::{Client, ClientHandle};
-//! use hickory_client::proto::runtime::TokioRuntimeProvider;
+//! use hickory_client::proto::runtime::tokio_runtime::TokioRuntimeProvider;
 //! use hickory_client::proto::rr::{DNSClass, Name, RData, RecordType};
 //! use hickory_client::proto::rr::rdata::A;
 //! use hickory_client::proto::tcp::TcpClientStream;

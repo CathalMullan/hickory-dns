@@ -38,7 +38,7 @@ use tokio::time::MissedTickBehavior;
 use hickory_proto::{
     DnsError, ProtoError, ProtoErrorKind,
     rr::{Record, RecordData, RecordType},
-    runtime::TokioRuntimeProvider,
+    runtime::tokio_runtime::TokioRuntimeProvider,
 };
 use hickory_resolver::{
     TokioResolver,

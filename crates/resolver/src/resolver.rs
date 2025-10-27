@@ -31,7 +31,7 @@ use crate::name_server_pool::{NameServerPool, NameServerTransportState, PoolCont
 #[cfg(feature = "__dnssec")]
 use crate::proto::dnssec::{DnssecDnsHandle, TrustAnchors};
 #[cfg(feature = "tokio")]
-use crate::proto::runtime::TokioRuntimeProvider;
+use crate::proto::runtime::tokio_runtime::TokioRuntimeProvider;
 use crate::proto::{
     ProtoError, ProtoErrorKind,
     op::{DnsRequest, DnsRequestOptions, DnsResponse, Query},

@@ -5,7 +5,7 @@ use tokio::runtime::Runtime;
 
 use hickory_proto::{
     rr::{Name, RData, Record, RecordType, rdata::CNAME},
-    runtime::TokioRuntimeProvider,
+    runtime::tokio_runtime::TokioRuntimeProvider,
 };
 #[cfg(feature = "__dnssec")]
 use hickory_server::dnssec::NxProofKind;

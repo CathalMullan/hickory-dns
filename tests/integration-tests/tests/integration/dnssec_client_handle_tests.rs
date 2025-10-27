@@ -11,7 +11,7 @@ use hickory_proto::dnssec::{DnssecDnsHandle, TrustAnchors};
 use hickory_proto::op::ResponseCode;
 use hickory_proto::rr::Name;
 use hickory_proto::rr::{DNSClass, RecordType};
-use hickory_proto::runtime::TokioRuntimeProvider;
+use hickory_proto::runtime::tokio_runtime::TokioRuntimeProvider;
 use hickory_proto::tcp::TcpClientStream;
 use hickory_proto::udp::UdpClientStream;
 use hickory_server::zone_handler::{Catalog, ZoneHandler};

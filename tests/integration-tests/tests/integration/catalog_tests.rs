@@ -9,7 +9,7 @@ use hickory_proto::{
             opt::{EdnsCode, EdnsOption, NSIDPayload},
         },
     },
-    runtime::{Time, TokioTime},
+    runtime::{Time, tokio_runtime::TokioTime},
     serialize::binary::BinEncodable,
     xfer::Protocol,
 };

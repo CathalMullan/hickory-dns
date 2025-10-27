@@ -29,14 +29,14 @@ use hickory_proto::{
     BufDnsStreamHandle, ProtoError,
     op::{DnsResponse, Message, SerialMessage},
     rr::Record,
-    runtime::TokioTime,
+    runtime::tokio_runtime::TokioTime,
     serialize::binary::{BinDecodable, BinDecoder, BinEncoder},
     xfer::{DnsClientStream, Protocol, StreamReceiver},
 };
 #[cfg(feature = "__dnssec")]
 use hickory_proto::{
     dnssec::{PublicKeyBuf, SigningKey, TrustAnchors, crypto::Ed25519SigningKey},
-    runtime::TokioRuntimeProvider,
+    runtime::tokio_runtime::TokioRuntimeProvider,
     udp::UdpClientStream,
 };
 #[cfg(feature = "__dnssec")]

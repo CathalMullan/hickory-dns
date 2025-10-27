@@ -444,7 +444,7 @@ pub(crate) mod tests {
     use tokio::runtime;
 
     use super::*;
-    use crate::{runtime::TokioRuntimeProvider, xfer::dns_handle::DnsStreamHandle};
+    use crate::{runtime::tokio_runtime::TokioRuntimeProvider, xfer::dns_handle::DnsStreamHandle};
 
     // TODO: is there a better way?
     const BASE_TEST_PORT: u16 = 5379;

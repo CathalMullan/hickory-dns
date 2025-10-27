@@ -374,7 +374,7 @@ mod tests {
     use crate::config::ServerGroup;
     #[cfg(feature = "__quic")]
     use crate::config::ServerOrderingStrategy;
-    use crate::proto::runtime::TokioRuntimeProvider;
+    use crate::proto::runtime::tokio_runtime::TokioRuntimeProvider;
     #[cfg(feature = "__quic")]
     use crate::proto::rustls::client_config;
 

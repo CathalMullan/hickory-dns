@@ -833,7 +833,7 @@ mod tests {
             RData,
             rdata::{A, SOA},
         },
-        runtime::TokioRuntimeProvider,
+        runtime::tokio_runtime::TokioRuntimeProvider,
     };
     use test_support::subscribe;
 

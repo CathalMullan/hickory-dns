@@ -44,7 +44,7 @@ use std::str::FromStr;
 
 use hickory_client::client::{Client, ClientHandle};
 use hickory_client::proto::rr::{DNSClass, Name, Record, RecordType};
-use hickory_client::proto::runtime::TokioRuntimeProvider;
+use hickory_client::proto::runtime::tokio_runtime::TokioRuntimeProvider;
 use hickory_client::proto::udp::UdpClientStream;
 use hickory_client::proto::xfer::DnsResponse;
 
