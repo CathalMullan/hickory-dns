@@ -21,15 +21,6 @@ use crate::error::ProtoError;
 use crate::tcp::DnsTcpStream;
 use crate::udp::DnsUdpSocket;
 
-/// Spawn a background task, if it was present
-#[cfg(any(test, feature = "tokio"))]
-pub fn spawn_bg<F: Future<Output = R> + Send + 'static, R: Send + 'static>(
-    runtime: &tokio::runtime::Runtime,
-    background: F,
-) -> tokio::task::JoinHandle<R> {
-    runtime.spawn(background)
-}
-
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub mod iocompat {
