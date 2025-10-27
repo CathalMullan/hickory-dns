@@ -78,12 +78,16 @@ pub mod iocompat {
     }
 }
 
-#[allow(missing_docs)]
+/// TODO
 #[cfg(feature = "tokio")]
 pub mod tokio_runtime {
     use alloc::sync::Arc;
     use core::task::{Context, Poll, ready};
     use std::io::IoSlice;
+    #[cfg(any(unix, target_os = "wasi"))]
+    use std::os::fd::{AsFd, BorrowedFd};
+    #[cfg(windows)]
+    use std::os::windows::io::{AsSocket, BorrowedSocket};
     use std::sync::Mutex;
 
     use futures_io::{AsyncRead, AsyncWrite};
@@ -100,13 +104,16 @@ pub mod tokio_runtime {
     use super::*;
     use crate::xfer::CONNECT_TIMEOUT;
 
-    impl Executor for Runtime {
+    /// TODO
+    pub struct TokioRuntime(pub Runtime);
+
+    impl Executor for TokioRuntime {
         fn new() -> Self {
-            Self::new().expect("failed to create tokio runtime")
+            Self(Runtime::new().expect("failed to create tokio runtime"))
         }
 
         fn block_on<F: Future>(&mut self, future: F) -> F::Output {
-            Self::block_on(self, future)
+            self.0.block_on(future)
         }
     }
 
@@ -154,7 +161,7 @@ pub mod tokio_runtime {
     impl RuntimeProvider for TokioRuntimeProvider {
         type Handle = TokioHandle;
         type Timer = TokioTime;
-        type Udp = TokioUdpSocket;
+        type Udp = TokioUdp;
         type Tcp = AsyncIoTokioAsStd<TcpStream>;
         #[cfg(feature = "__tls")]
         type Tls = AsyncIoTokioAsStd<TlsStream<TcpStream>>;
@@ -216,22 +223,25 @@ pub mod tokio_runtime {
             local_addr: SocketAddr,
             _server_addr: SocketAddr,
         ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Udp>>>> {
-            Box::pin(TokioUdpSocket::bind(local_addr))
+            Box::pin(async move { TokioUdpSocket::bind(local_addr).await.map(TokioUdp) })
         }
 
         fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Self::Udp> {
-            TokioUdpSocket::from_std(socket)
+            TokioUdpSocket::from_std(socket).map(TokioUdp)
         }
     }
 
+    /// TODO
+    pub struct TokioUdp(pub TokioUdpSocket);
+
     #[async_trait]
-    impl DnsUdpSocket for TokioUdpSocket {
+    impl DnsUdpSocket for TokioUdp {
         fn local_addr(&self) -> io::Result<SocketAddr> {
-            self.local_addr()
+            self.0.local_addr()
         }
 
         fn poll_recv_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-            Self::poll_recv_ready(self, cx)
+            self.0.poll_recv_ready(cx)
         }
 
         fn poll_recv_from(
@@ -240,13 +250,13 @@ pub mod tokio_runtime {
             buf: &mut [u8],
         ) -> Poll<io::Result<(usize, SocketAddr)>> {
             let mut buf = ReadBuf::new(buf);
-            let addr = ready!(Self::poll_recv_from(self, cx, &mut buf))?;
+            let addr = ready!(self.0.poll_recv_from(cx, &mut buf))?;
             let len = buf.filled().len();
             Poll::Ready(Ok((len, addr)))
         }
 
         fn poll_send_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-            Self::poll_send_ready(self, cx)
+            self.0.poll_send_ready(cx)
         }
 
         fn poll_send_to(
@@ -255,7 +265,21 @@ pub mod tokio_runtime {
             buf: &[u8],
             target: SocketAddr,
         ) -> Poll<io::Result<usize>> {
-            Self::poll_send_to(self, cx, buf, target)
+            self.0.poll_send_to(cx, buf, target)
+        }
+    }
+
+    #[cfg(any(unix, target_os = "wasi"))]
+    impl AsFd for TokioUdp {
+        fn as_fd(&self) -> BorrowedFd<'_> {
+            self.0.as_fd()
+        }
+    }
+
+    #[cfg(windows)]
+    impl AsSocket for TokioUdp {
+        fn as_socket(&self) -> BorrowedSocket<'_> {
+            self.0.as_socket()
         }
     }
 

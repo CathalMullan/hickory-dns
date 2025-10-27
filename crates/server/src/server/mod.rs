@@ -18,6 +18,7 @@ use std::{
 use crate::proto::rustls::tls_from_stream;
 use bytes::Bytes;
 use futures_util::StreamExt;
+use hickory_proto::runtime::tokio_runtime::TokioUdp;
 use ipnet::IpNet;
 #[cfg(feature = "__tls")]
 use rustls::{ServerConfig, server::ResolvesServerCert};
@@ -322,7 +323,11 @@ impl<T: RequestHandler> Server<T> {
         let cx = self.context.clone();
 
         self.join_set.spawn(quic_handler::handle_quic_with_server(
-            QuicServer::with_socket_and_tls_config(socket, tls_config, self.provider.clone())?,
+            QuicServer::with_socket_and_tls_config(
+                TokioUdp(socket),
+                tls_config,
+                self.provider.clone(),
+            )?,
             dns_hostname,
             cx,
         ));
@@ -388,7 +393,11 @@ impl<T: RequestHandler> Server<T> {
         dns_hostname: Option<String>,
     ) -> io::Result<()> {
         self.join_set.spawn(h3_handler::handle_h3_with_server(
-            H3Server::with_socket_and_tls_config(socket, tls_config, self.provider.clone())?,
+            H3Server::with_socket_and_tls_config(
+                TokioUdp(socket),
+                tls_config,
+                self.provider.clone(),
+            )?,
             dns_hostname,
             self.context.clone(),
         ));
@@ -441,8 +450,10 @@ async fn handle_udp(
 
     // create the new UdpStream, the IP address isn't relevant, and ideally goes essentially no where.
     //   the address used is acquired from the inbound queries
-    let (mut stream, stream_handle) =
-        UdpStream::<TokioRuntimeProvider>::with_bound(socket, ([127, 255, 255, 254], 0).into());
+    let (mut stream, stream_handle) = UdpStream::<TokioRuntimeProvider>::with_bound(
+        TokioUdp(socket),
+        ([127, 255, 255, 254], 0).into(),
+    );
 
     let mut inner_join_set = JoinSet::new();
     loop {

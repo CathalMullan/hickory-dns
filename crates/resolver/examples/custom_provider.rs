@@ -11,7 +11,7 @@ use {
         ConnectionProvider, Resolver,
         config::{GOOGLE, ResolverConfig},
         proto::runtime::RuntimeProvider,
-        proto::runtime::tokio_runtime::{AsyncIoTokioAsStd, TokioHandle, TokioTime},
+        proto::runtime::tokio_runtime::{AsyncIoTokioAsStd, TokioHandle, TokioTime, TokioUdp},
     },
     rustls::{ClientConfig, pki_types::ServerName},
     std::future::Future,
@@ -35,7 +35,7 @@ struct PrintProvider {
 impl RuntimeProvider for PrintProvider {
     type Handle = TokioHandle;
     type Timer = TokioTime;
-    type Udp = UdpSocket;
+    type Udp = TokioUdp;
     type Tcp = AsyncIoTokioAsStd<TcpStream>;
     type Tls = AsyncIoTokioAsStd<TlsStream<TcpStream>>;
 
@@ -99,12 +99,12 @@ impl RuntimeProvider for PrintProvider {
         // The server_addr parameter is used only when you need to establish a tunnel or something similar.
         // For example, you try to use a http proxy and encapsulate UDP packets inside a TCP stream.
         println!("Create udp local_addr: {local_addr}, server_addr: {server_addr}");
-        Box::pin(UdpSocket::bind(local_addr))
+        Box::pin(async move { UdpSocket::bind(local_addr).await.map(TokioUdp) })
     }
 
     fn wrap_udp_socket(&self, socket: std::net::UdpSocket) -> io::Result<Self::Udp> {
         println!("Wrapping std udp socket");
-        UdpSocket::from_std(socket)
+        UdpSocket::from_std(socket).map(TokioUdp)
     }
 }
 

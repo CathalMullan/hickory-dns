@@ -9,7 +9,7 @@ use std::{io, net::SocketAddr, sync::Arc};
 
 use bytes::Bytes;
 use futures_util::lock::Mutex;
-use hickory_proto::runtime::tokio_runtime::TokioRuntimeProvider;
+use hickory_proto::runtime::tokio_runtime::{TokioRuntimeProvider, TokioUdp};
 use rustls::server::ResolvesServerCert;
 use tokio::{net, task::JoinSet};
 use tracing::{debug, error, warn};
@@ -39,7 +39,7 @@ pub(super) async fn handle_quic(
 ) -> Result<(), ProtoError> {
     debug!(?socket, "registered quic");
     handle_quic_with_server(
-        QuicServer::with_socket(socket, server_cert_resolver, provider)?,
+        QuicServer::with_socket(TokioUdp(socket), server_cert_resolver, provider)?,
         dns_hostname,
         cx,
     )

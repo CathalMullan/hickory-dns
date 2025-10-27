@@ -1171,7 +1171,6 @@ mod tests {
     use futures_util::stream::once;
     use futures_util::{Stream, future};
     use test_support::subscribe;
-    use tokio::runtime::Runtime;
 
     #[cfg(all(unix, feature = "system-config"))]
     use super::testing::hosts_lookup_test;
@@ -1189,6 +1188,7 @@ mod tests {
     use crate::config::{CLOUDFLARE, GOOGLE, ResolverConfig, ResolverOpts};
     use crate::proto::op::{DnsRequest, DnsResponse, Message};
     use crate::proto::rr::rdata::A;
+    use crate::proto::runtime::tokio_runtime::TokioRuntime;
     use crate::proto::xfer::DnsExchange;
     use crate::proto::{DnsError, NoRecords, ProtoError, ProtoErrorKind};
 
@@ -1240,7 +1240,7 @@ mod tests {
     fn test_ip_lookup_across_threads() {
         subscribe();
         let handle = TokioRuntimeProvider::default();
-        ip_lookup_across_threads_test::<Runtime, _>(handle);
+        ip_lookup_across_threads_test::<TokioRuntime, _>(handle);
     }
 
     #[tokio::test]

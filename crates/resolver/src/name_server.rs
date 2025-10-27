@@ -1259,7 +1259,6 @@ mod opportunistic_enc_tests {
 
     use futures_util::stream::once;
     use futures_util::{Stream, future};
-    use hickory_proto::runtime::tokio_runtime::{AsyncIoTokioAsStd, TokioTime};
     #[cfg(feature = "metrics")]
     use metrics::{Key, KeyName, Label, SharedString, Unit, with_local_recorder};
     #[cfg(feature = "metrics")]
@@ -1268,12 +1267,14 @@ mod opportunistic_enc_tests {
     use metrics_util::{CompositeKey, MetricKind};
     use parking_lot::Mutex as SyncMutex;
     use test_support::subscribe;
-    use tokio::net::UdpSocket;
 
     #[cfg(feature = "metrics")]
     use crate::proto::ProtoErrorKind;
     use crate::proto::op::{DnsRequest, DnsResponse, Message, ResponseCode};
-    use crate::proto::runtime::{RuntimeProvider, Spawn};
+    use crate::proto::runtime::{
+        RuntimeProvider, Spawn,
+        tokio_runtime::{AsyncIoTokioAsStd, TokioTime, TokioUdp},
+    };
     use crate::proto::xfer::Protocol;
     use crate::proto::{DnsHandle, ProtoError};
 
@@ -2106,7 +2107,7 @@ mod opportunistic_enc_tests {
     impl RuntimeProvider for MockSyncRuntimeProvider {
         type Handle = MockSyncHandle;
         type Timer = TokioTime;
-        type Udp = UdpSocket;
+        type Udp = TokioUdp;
         type Tcp = AsyncIoTokioAsStd<tokio::net::TcpStream>;
         type Tls = AsyncIoTokioAsStd<tokio_rustls::client::TlsStream<tokio::net::TcpStream>>;
 

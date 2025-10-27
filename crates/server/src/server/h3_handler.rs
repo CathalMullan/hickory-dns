@@ -11,7 +11,7 @@ use bytes::{Buf, Bytes};
 use futures_util::lock::Mutex;
 use h3::server::RequestStream;
 use h3_quinn::BidiStream;
-use hickory_proto::runtime::tokio_runtime::TokioRuntimeProvider;
+use hickory_proto::runtime::tokio_runtime::{TokioRuntimeProvider, TokioUdp};
 use rustls::server::ResolvesServerCert;
 use tokio::{net, task::JoinSet};
 use tracing::{debug, error, warn};
@@ -45,7 +45,7 @@ pub(super) async fn handle_h3(
 ) -> Result<(), ProtoError> {
     debug!("registered h3: {:?}", socket);
     handle_h3_with_server(
-        H3Server::with_socket(socket, server_cert_resolver, provider)?,
+        H3Server::with_socket(TokioUdp(socket), server_cert_resolver, provider)?,
         dns_hostname,
         cx,
     )
