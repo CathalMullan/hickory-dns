@@ -1,5 +1,5 @@
+use hickory_net::xfer::Protocol;
 use hickory_proto::op::{Header, OpCode, ResponseCode};
-use hickory_proto::xfer::Protocol;
 use metrics::{Counter, Unit, counter, describe_counter};
 
 use crate::zone_handler::metrics::Direction;

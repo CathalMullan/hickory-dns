@@ -99,7 +99,7 @@ use core::fmt::Display;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use super::{DigestType, Proof, crypto::Digest, handle::proof_log_yield, rdata::NSEC3};
+use super::{DigestType, Proof, crypto::Digest, rdata::NSEC3, verify::proof_log_yield};
 use crate::{
     error::ProtoResult,
     op::{Query, ResponseCode},
@@ -107,7 +107,8 @@ use crate::{
     serialize::binary::{BinEncodable, BinEncoder, DecodeError, NameEncoding},
 };
 
-pub(super) fn verify_nsec3(
+/// FIXME(NET)
+pub fn verify_nsec3(
     query: &Query,
     soa: &Name,
     response_code: ResponseCode,

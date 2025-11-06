@@ -19,6 +19,7 @@ use once_cell::sync::Lazy;
 use crate::{
     cache::{MAX_TTL, ResponseCache, TtlConfig},
     lookup::Lookup,
+    net::xfer::{DnsHandle, FirstAnswer},
     proto::{
         NoRecords, ProtoError, ProtoErrorKind,
         op::{DnsRequestOptions, DnsResponse, Message, OpCode, Query, ResponseCode},
@@ -31,7 +32,6 @@ use crate::{
             rdata::{A, AAAA, CNAME, PTR},
             resource::RecordRef,
         },
-        xfer::{DnsHandle, FirstAnswer},
     },
 };
 

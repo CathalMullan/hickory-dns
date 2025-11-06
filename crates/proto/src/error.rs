@@ -61,7 +61,7 @@ macro_rules! trace {
 }
 
 /// An alias for results returned by functions of this crate
-pub(crate) type ProtoResult<T> = ::core::result::Result<T, ProtoError>;
+pub type ProtoResult<T> = ::core::result::Result<T, ProtoError>;
 
 /// The error type for errors that get returned in the crate
 #[derive(Error, Clone, Debug)]
@@ -400,7 +400,8 @@ pub enum DnsError {
     NoRecordsFound(NoRecords),
     /// No Records and there is a corresponding DNSSEC Proof for NSEC
     #[cfg(feature = "__dnssec")]
-    #[non_exhaustive]
+    // FIXME(NET)
+    // #[non_exhaustive]
     #[error("DNSSEC Negative Record Response for {query}, {proof}")]
     Nsec {
         /// Query for which the NSEC was returned

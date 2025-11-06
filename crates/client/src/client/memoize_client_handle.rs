@@ -11,14 +11,14 @@ use std::sync::Arc;
 use futures_util::future::FutureExt;
 use futures_util::lock::Mutex;
 use futures_util::stream::Stream;
-use hickory_proto::{
-    ProtoError,
-    op::{DnsRequest, DnsResponse, Query},
-    xfer::DnsHandle,
-};
 
 use crate::client::ClientHandle;
 use crate::client::rc_stream::{RcStream, rc_stream};
+use crate::net::xfer::DnsHandle;
+use crate::proto::{
+    ProtoError,
+    op::{DnsRequest, DnsResponse, Query},
+};
 
 // TODO: move to proto
 /// A ClientHandle for memoized (cached) responses to queries.
@@ -97,12 +97,14 @@ mod test {
     use futures::stream;
 
     use super::*;
+    use hickory_net::{
+        runtime::TokioRuntimeProvider,
+        xfer::{DnsHandle, FirstAnswer},
+    };
     use hickory_proto::{
         ProtoError,
         op::{DnsRequest, DnsResponse, Message, MessageType, OpCode, Query},
         rr::RecordType,
-        runtime::TokioRuntimeProvider,
-        xfer::{DnsHandle, FirstAnswer},
     };
     use test_support::subscribe;
 

@@ -5,12 +5,8 @@ use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
 use futures::{StreamExt, future};
-use hickory_proto::{
-    DnsStreamHandle,
-    op::{Message, SerialMessage},
-    runtime::iocompat::AsyncIoTokioAsStd,
-    tcp::TcpStream,
-};
+use hickory_net::{DnsStreamHandle, runtime::iocompat::AsyncIoTokioAsStd, tcp::TcpStream};
+use hickory_proto::op::{Message, SerialMessage};
 use tokio::net::{TcpListener, UdpSocket};
 
 mod handlers;
@@ -193,12 +189,8 @@ mod test {
 
     use anyhow::Result;
     use hickory_client::client::{Client, ClientHandle};
-    use hickory_proto::{
-        rr::{DNSClass, RData, RecordType, domain::Name, rdata},
-        runtime::TokioRuntimeProvider,
-        tcp::TcpClientStream,
-        udp::UdpClientStream,
-    };
+    use hickory_net::{runtime::TokioRuntimeProvider, tcp::TcpClientStream, udp::UdpClientStream};
+    use hickory_proto::rr::{DNSClass, RData, RecordType, domain::Name, rdata};
 
     use crate::{Transport, handlers::base_handler};
 

@@ -20,18 +20,20 @@ use futures_util::{
 };
 use tracing::debug;
 
-use hickory_proto::{
+use crate::net::{
+    runtime::RuntimeProvider,
+    xfer::{
+        BufDnsStreamHandle, DnsClientStream, DnsExchange, DnsExchangeBackground, DnsExchangeSend,
+        DnsHandle, DnsMultiplexer, DnsRequestSender,
+    },
+};
+use crate::proto::{
     ProtoError, ProtoErrorKind,
     op::{
         DnsRequest, DnsRequestOptions, DnsResponse, Edns, Message, MessageSigner, OpCode, Query,
         update_message,
     },
     rr::{DNSClass, Name, Record, RecordSet, RecordType, rdata::SOA},
-    runtime::RuntimeProvider,
-    xfer::{
-        BufDnsStreamHandle, DnsClientStream, DnsExchange, DnsExchangeBackground, DnsExchangeSend,
-        DnsHandle, DnsMultiplexer, DnsRequestSender,
-    },
 };
 
 /// A DNS Client implemented over futures-rs.
@@ -828,12 +830,10 @@ mod tests {
 
     use ClientStreamXfrState::*;
     use futures_util::stream::iter;
-    use hickory_proto::{
-        rr::{
-            RData,
-            rdata::{A, SOA},
-        },
-        runtime::TokioRuntimeProvider,
+    use hickory_net::runtime::TokioRuntimeProvider;
+    use hickory_proto::rr::{
+        RData,
+        rdata::{A, SOA},
     };
     use test_support::subscribe;
 
@@ -1062,10 +1062,8 @@ mod tests {
     async fn async_client() {
         subscribe();
         use crate::client::{Client, ClientHandle};
-        use hickory_proto::{
-            rr::{DNSClass, Name, RData, RecordType},
-            tcp::TcpClientStream,
-        };
+        use hickory_net::tcp::TcpClientStream;
+        use hickory_proto::rr::{DNSClass, Name, RData, RecordType};
         use std::str::FromStr;
 
         // Since we used UDP in the previous examples, let's change things up a bit and use TCP here

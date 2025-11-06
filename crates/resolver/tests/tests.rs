@@ -9,19 +9,17 @@ use std::{
 };
 
 use futures_util::stream::{FuturesUnordered, StreamExt};
-use test_support::{MockNetworkHandler, MockProvider, MockRecord, subscribe};
-
-use hickory_resolver::{
-    NameServer, NameServerPool, PoolContext, TlsConfig,
-    config::{NameServerConfig, ProtocolConfig, ResolverOpts},
-};
-
+use hickory_net::xfer::{DnsHandle, FirstAnswer};
 use hickory_proto::{
     ProtoError,
     op::{DnsRequestOptions, Message, Query, ResponseCode},
     rr::{Name, RecordType},
-    xfer::{DnsHandle, FirstAnswer},
 };
+use hickory_resolver::{
+    NameServer, NameServerPool, PoolContext, TlsConfig,
+    config::{NameServerConfig, ProtocolConfig, ResolverOpts},
+};
+use test_support::{MockNetworkHandler, MockProvider, MockRecord, subscribe};
 
 #[tokio::test]
 async fn test_shared_lookup() -> Result<(), ProtoError> {

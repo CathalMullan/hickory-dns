@@ -30,29 +30,29 @@ categories.workspace = true
 license.workspace = true
 
 [features]
-backtrace = ["hickory-proto/backtrace"]
+backtrace = ["hickory-net/backtrace"]
 
-tls-aws-lc-rs = ["hickory-proto/tls-aws-lc-rs"]
-https-aws-lc-rs = ["hickory-proto/https-aws-lc-rs"]
-quic-aws-lc-rs = ["hickory-proto/quic-aws-lc-rs"]
-h3-aws-lc-rs = ["hickory-proto/h3-aws-lc-rs"]
+tls-aws-lc-rs = ["hickory-net/tls-aws-lc-rs"]
+https-aws-lc-rs = ["hickory-net/https-aws-lc-rs"]
+quic-aws-lc-rs = ["hickory-net/quic-aws-lc-rs"]
+h3-aws-lc-rs = ["hickory-net/h3-aws-lc-rs"]
 
-tls-ring = ["hickory-proto/tls-ring"]
-https-ring = ["hickory-proto/https-ring"]
-quic-ring = ["hickory-proto/quic-ring"]
-h3-ring = ["hickory-proto/h3-ring"]
+tls-ring = ["hickory-net/tls-ring"]
+https-ring = ["hickory-net/https-ring"]
+quic-ring = ["hickory-net/quic-ring"]
+h3-ring = ["hickory-net/h3-ring"]
 
-webpki-roots = ["hickory-proto/webpki-roots"]
-rustls-platform-verifier = ["hickory-proto/rustls-platform-verifier"]
+webpki-roots = ["hickory-net/webpki-roots"]
+rustls-platform-verifier = ["hickory-net/rustls-platform-verifier"]
 
-dnssec-aws-lc-rs = ["hickory-proto/dnssec-aws-lc-rs", "__dnssec"]
-dnssec-ring = ["hickory-proto/dnssec-ring", "__dnssec"]
+dnssec-aws-lc-rs = ["hickory-net/dnssec-aws-lc-rs", "__dnssec"]
+dnssec-ring = ["hickory-net/dnssec-ring", "__dnssec"]
 __dnssec = []
 
-serde = ["hickory-proto/serde"]
+serde = ["hickory-net/serde"]
 
 # enables experimental the mDNS (multicast) feature
-mdns = ["hickory-proto/mdns"]
+mdns = ["hickory-net/mdns"]
 
 [lib]
 name = "hickory_client"
@@ -62,7 +62,8 @@ path = "src/lib.rs"
 futures-util = { workspace = true, default-features = false, features = ["std"] }
 tracing.workspace = true
 tokio = { workspace = true, features = ["rt", "net"] }
-hickory-proto = { workspace = true, features = ["text-parsing", "tokio"] }
+hickory-proto = { workspace = true, features = ["text-parsing"] }
+hickory-net = { workspace = true, features = ["text-parsing", "tokio"] }
 
 [dev-dependencies]
 futures = { workspace = true, default-features = false, features = ["std", "executor"] }

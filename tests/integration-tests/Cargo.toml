@@ -120,6 +120,7 @@ tokio = { workspace = true, features = ["time", "rt"] }
 tracing.workspace = true
 hickory-client.workspace = true
 hickory-proto = { workspace = true, features = ["testing", "std"] }
+hickory-net = { workspace = true, features = ["testing", "std"] }
 hickory-resolver = { workspace = true, features = ["tokio"] }
 hickory-server = { workspace = true, features = ["testing", "resolver"] }
 webpki-roots = { workspace = true, optional = true }

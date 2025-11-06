@@ -17,13 +17,15 @@ use parking_lot::Mutex;
 use tracing::{debug, error, trace, warn};
 
 #[cfg(feature = "__dnssec")]
-use crate::proto::dnssec::{DnssecDnsHandle, TrustAnchors};
+use crate::net::dnssec::DnssecDnsHandle;
+#[cfg(feature = "__dnssec")]
+use crate::proto::dnssec::TrustAnchors;
 use crate::{
     DnssecPolicy, Error, ErrorKind, RecursorBuilder,
     error::AuthorityData,
     is_subzone,
+    net::DnsHandle,
     proto::{
-        DnsHandle,
         access_control::AccessControlSet,
         op::{DnsRequestOptions, Message, Query},
         rr::{

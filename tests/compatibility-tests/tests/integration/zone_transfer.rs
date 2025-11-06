@@ -14,10 +14,10 @@ use futures::TryStreamExt;
 use time::Duration;
 
 use hickory_client::client::{Client, ClientHandle};
+use hickory_client::net::runtime::TokioRuntimeProvider;
+use hickory_client::net::tcp::TcpClientStream;
+use hickory_client::net::xfer::DnsMultiplexer;
 use hickory_client::proto::rr::{Name, RData, Record, RecordType, rdata::A};
-use hickory_client::proto::runtime::TokioRuntimeProvider;
-use hickory_client::proto::tcp::TcpClientStream;
-use hickory_client::proto::xfer::DnsMultiplexer;
 use hickory_compatibility::named_process;
 use test_support::subscribe;
 

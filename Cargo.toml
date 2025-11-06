@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/proto",
+    "crates/net",
     "crates/resolver",
     "crates/recursor",
     "crates/client",
@@ -33,6 +34,7 @@ hickory-recursor = { version = "0.26.0-alpha.1", path = "crates/recursor", defau
 hickory-resolver = { version = "0.26.0-alpha.1", path = "crates/resolver", default-features = false }
 hickory-server = { version = "0.26.0-alpha.1", path = "crates/server", default-features = false }
 hickory-proto = { version = "0.26.0-alpha.1", path = "crates/proto", default-features = false, features = ["std"] }
+hickory-net = { version = "0.26.0-alpha.1", path = "crates/net", default-features = false, features = ["std"] }
 test-support.path = "tests/test-support"
 
 

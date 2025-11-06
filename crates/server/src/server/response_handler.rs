@@ -10,13 +10,13 @@ use std::{io, net::SocketAddr};
 use tracing::{debug, error, trace};
 
 use crate::{
+    net::{BufDnsStreamHandle, DnsStreamHandle, xfer::Protocol},
     proto::{
-        BufDnsStreamHandle, DnsStreamHandle, ProtoError,
+        ProtoError,
         op::{Header, MessageType, OpCode, ResponseCode, SerialMessage},
         rr::Record,
         serialize::binary::BinEncodable,
         serialize::binary::BinEncoder,
-        xfer::Protocol,
     },
     server::ResponseInfo,
     zone_handler::MessageResponse,
@@ -80,7 +80,7 @@ impl ResponseHandle {
                     edns.max_payload()
                 } else {
                     // No EDNS, use the recommended max from RFC6891.
-                    hickory_proto::udp::MAX_RECEIVE_BUFFER_SIZE as u16
+                    hickory_net::udp::MAX_RECEIVE_BUFFER_SIZE as u16
                 }
             }
             _ => u16::MAX,

@@ -20,12 +20,11 @@ use super::{
     sanitize_src_address,
 };
 use crate::{
-    proto::{
-        ProtoError,
+    net::{
         quic::{DoqErrorCode, QuicServer, QuicStream, QuicStreams},
-        rr::Record,
         xfer::Protocol,
     },
+    proto::{ProtoError, rr::Record},
     zone_handler::MessageResponse,
 };
 

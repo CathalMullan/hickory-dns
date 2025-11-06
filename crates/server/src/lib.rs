@@ -48,6 +48,7 @@
 
 #[cfg(feature = "blocklist")]
 pub use crate::store::blocklist;
+pub use hickory_net as net;
 pub use hickory_proto as proto;
 #[cfg(feature = "recursor")]
 pub use hickory_recursor as recursor;

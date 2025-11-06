@@ -7,14 +7,13 @@ use std::{net::Ipv4Addr, sync::Arc};
 
 use hickory_client::client::{Client, ClientHandle};
 use hickory_integration::print_response;
+use hickory_net::{runtime::TokioRuntimeProvider, udp::UdpClientStream};
 use hickory_proto::{
     op::ResponseCode,
     rr::{
         DNSClass, RData, Record, RecordType,
         rdata::{A, MX, NS, SOA, SRV, TXT},
     },
-    runtime::TokioRuntimeProvider,
-    udp::UdpClientStream,
 };
 use hickory_resolver::Name;
 use hickory_server::{

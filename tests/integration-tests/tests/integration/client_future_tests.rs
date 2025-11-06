@@ -13,24 +13,27 @@ use hickory_integration::{
     GOOGLE_V4, GOOGLE_V6, NeverReturnsClientStream, TEST3_V4, TestClientStream,
     example_zone::create_example,
 };
+use hickory_net::{
+    DnsHandle, runtime::TokioRuntimeProvider, tcp::TcpClientStream, udp::UdpClientStream,
+    xfer::FirstAnswer,
+};
+#[cfg(all(feature = "__dnssec", feature = "sqlite"))]
+use hickory_net::{
+    runtime::TokioTime,
+    xfer::{DnsExchangeBackground, DnsMultiplexer},
+};
 use hickory_proto::{
-    DnsHandle, ProtoErrorKind,
+    ProtoErrorKind,
     op::{DnsRequest, Edns, Message, Query, ResponseCode},
     rr::{
         DNSClass, Name, RecordSet, RecordType,
         rdata::opt::{EdnsCode, EdnsOption},
     },
-    runtime::TokioRuntimeProvider,
-    tcp::TcpClientStream,
-    udp::UdpClientStream,
-    xfer::FirstAnswer,
 };
 #[cfg(all(feature = "__dnssec", feature = "sqlite"))]
 use hickory_proto::{
     dnssec::{Algorithm, SigSigner, SigningKey, crypto::RsaSigningKey, rdata::DNSSECRData},
     rr::{RData, Record, rdata::A},
-    runtime::TokioTime,
-    xfer::{DnsExchangeBackground, DnsMultiplexer},
 };
 #[cfg(all(feature = "__dnssec", feature = "sqlite"))]
 use hickory_server::zone_handler::AxfrPolicy;
@@ -113,8 +116,8 @@ async fn test_query_tcp_ipv6() {
 #[cfg(feature = "__https")]
 async fn test_query_https() {
     use hickory_integration::CLOUDFLARE_V4_TLS;
-    use hickory_proto::h2::HttpsClientStreamBuilder;
-    use hickory_proto::rustls::default_provider;
+    use hickory_net::h2::HttpsClientStreamBuilder;
+    use hickory_net::rustls::default_provider;
     use rustls::{ClientConfig, RootCertStore};
 
     const ALPN_H2: &[u8] = b"h2";

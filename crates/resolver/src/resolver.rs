@@ -29,15 +29,17 @@ use crate::lookup::{Lookup, TypedLookup};
 use crate::lookup_ip::{LookupIp, LookupIpFuture};
 use crate::name_server_pool::{NameServerPool, NameServerTransportState, PoolContext};
 #[cfg(feature = "__dnssec")]
-use crate::proto::dnssec::{DnssecDnsHandle, TrustAnchors};
+use crate::net::dnssec::DnssecDnsHandle;
 #[cfg(feature = "tokio")]
-use crate::proto::runtime::TokioRuntimeProvider;
+use crate::net::runtime::TokioRuntimeProvider;
+use crate::net::xfer::{DnsHandle, RetryDnsHandle};
+#[cfg(feature = "__dnssec")]
+use crate::proto::dnssec::TrustAnchors;
 use crate::proto::{
     ProtoError, ProtoErrorKind,
     op::{DnsRequest, DnsRequestOptions, DnsResponse, Query},
     rr::domain::usage::ONION,
     rr::{IntoName, Name, RData, Record, RecordType, rdata},
-    xfer::{DnsHandle, RetryDnsHandle},
 };
 
 macro_rules! lookup_fn {
@@ -684,7 +686,8 @@ pub(crate) mod testing {
     use crate::Resolver;
     use crate::config::{GOOGLE, LookupIpStrategy, NameServerConfig, ResolverConfig};
     use crate::connection_provider::ConnectionProvider;
-    use crate::proto::{rr::Name, runtime::Executor};
+    use crate::net::runtime::Executor;
+    use crate::proto::rr::Name;
 
     /// Test IP lookup from URLs.
     pub(crate) async fn lookup_test<R: ConnectionProvider>(config: ResolverConfig, handle: R) {
@@ -1183,9 +1186,9 @@ mod tests {
     use super::testing::{sec_lookup_fails_test, sec_lookup_test};
     use super::*;
     use crate::config::{CLOUDFLARE, GOOGLE, ResolverConfig, ResolverOpts};
+    use crate::net::xfer::DnsExchange;
     use crate::proto::op::{DnsRequest, DnsResponse, Message};
     use crate::proto::rr::rdata::A;
-    use crate::proto::xfer::DnsExchange;
     use crate::proto::{DnsError, NoRecords, ProtoError, ProtoErrorKind};
 
     fn is_send_t<T: Send>() -> bool {

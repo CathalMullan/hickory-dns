@@ -1,0 +1,122 @@
+[package]
+name = "hickory-net"
+
+# A short blurb about the package. This is not rendered in any format when
+# uploaded to crates.io (aka this is not markdown)
+description = """
+TODO
+"""
+
+# These URLs point to more information about the repository
+documentation = "https://docs.rs/hickory-net"
+
+# This points to a file in the repository (relative to this Cargo.toml). The
+# contents of this file are stored and indexed in the registry.
+readme = "README.md"
+
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+license.workspace = true
+
+[features]
+default = ["std", "tokio"]
+std = [
+    "hickory-proto/std",
+    "futures-channel/std",
+    "futures-io/std",
+    "futures-util/std",
+]
+
+tls-aws-lc-rs = ["hickory-proto/tls-aws-lc-rs", "tokio-rustls/aws-lc-rs", "__tls"]
+https-aws-lc-rs = ["hickory-proto/https-aws-lc-rs", "tls-aws-lc-rs", "__https"]
+quic-aws-lc-rs = ["hickory-proto/quic-aws-lc-rs", "quinn/rustls-aws-lc-rs", "tls-aws-lc-rs", "__quic"]
+h3-aws-lc-rs = ["hickory-proto/h3-aws-lc-rs", "quic-aws-lc-rs", "__h3"]
+
+tls-ring = ["hickory-proto/tls-ring", "tokio-rustls/ring", "__tls"]
+https-ring = ["hickory-proto/https-ring", "tls-ring", "__https"]
+quic-ring = ["hickory-proto/quic-ring", "quinn/rustls-ring", "tls-ring", "__quic"]
+h3-ring = ["hickory-proto/h3-ring", "quic-ring", "__h3"]
+
+__tls = ["dep:bytes", "dep:rustls", "dep:tokio-rustls", "std", "tokio"]
+__https = ["dep:bytes", "dep:h2", "dep:http", "std"]
+__quic = ["dep:bytes", "dep:quinn", "std"]
+__h3 = ["dep:h3", "dep:h3-quinn", "dep:http", "std"]
+
+rustls-platform-verifier = ["dep:rustls-platform-verifier", "std"]
+
+dnssec-aws-lc-rs = ["hickory-proto/dnssec-aws-lc-rs", "__dnssec"]
+dnssec-ring = ["hickory-proto/dnssec-ring", "__dnssec"]
+__dnssec = ["std"]
+testing = ["hickory-proto/testing"]
+
+text-parsing = ["hickory-proto/text-parsing"]
+tokio = ["dep:tokio", "std", "tokio/net", "tokio/rt", "tokio/time", "tokio/rt-multi-thread"]
+
+serde = ["dep:serde", "hickory-proto/serde"]
+
+# enables experimental the mDNS (multicast) feature
+mdns = ["socket2/all", "hickory-proto/mdns"]
+
+# enables a custom random function backed by a no_std compatible mutex
+no-std-rand = ["hickory-proto/no-std-rand"]
+
+wasm-bindgen = ["hickory-proto/wasm-bindgen"]
+
+backtrace = ["hickory-proto/backtrace"]
+
+access-control = ["hickory-proto/access-control"]
+
+[lib]
+name = "hickory_net"
+path = "src/lib.rs"
+
+[dependencies]
+hickory-proto.workspace = true
+
+async-trait.workspace = true
+bytes = { workspace = true, optional = true }
+cfg-if.workspace = true
+futures-channel = { workspace = true, default-features = false, features = ["alloc"] }
+futures-io = { workspace = true, default-features = false, optional = true }
+futures-util = { workspace = true, default-features = false, features = ["alloc", "async-await-macro"] }
+h2 = { workspace = true, features = ["stream"], optional = true }
+h3 = { workspace = true, optional = true }
+h3-quinn = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
+once_cell = { workspace = true }
+quinn = { workspace = true, optional = true, features = ["log", "runtime-tokio"] }
+rand = { workspace = true, features = ["std_rng"] }
+rustls = { workspace = true, optional = true, default-features = false }
+rustls-platform-verifier = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
+socket2 = { workspace = true, optional = true }
+thiserror.workspace = true
+tokio = { workspace = true, features = ["io-util", "macros"], optional = true }
+tokio-rustls = { workspace = true, optional = true, features = ["early-data"] }
+tracing = { workspace = true, default-features = false }
+webpki-roots = { workspace = true, optional = true }
+
+[dev-dependencies]
+futures-executor = { workspace = true, default-features = false, features = ["std"] }
+test-support.workspace = true
+tokio = { workspace = true, features = ["rt", "time", "macros", "test-util"] }
+
+[package.metadata.docs.rs]
+all-features = true
+default-target = "x86_64-unknown-linux-gnu"
+targets = ["x86_64-apple-darwin", "x86_64-pc-windows-msvc"]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
+
+[package.metadata.cargo-all-features]
+skip_optional_dependencies = true
+max_combination_size = 2
+denylist = ["__tls", "__https", "__quic", "__h3", "__dnssec"]

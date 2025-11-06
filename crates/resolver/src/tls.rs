@@ -16,8 +16,8 @@ use rustls::pki_types::ServerName;
 
 use crate::proto::BufDnsStreamHandle;
 use crate::proto::ProtoError;
-use crate::proto::rustls::TlsClientStream;
-use crate::proto::rustls::tls_client_stream::tls_client_connect_with_future;
+use crate::net::rustls::TlsClientStream;
+use crate::net::rustls::tls_client_stream::tls_client_connect_with_future;
 use crate::proto::tcp::DnsTcpStream;
 
 pub(crate) fn new_tls_stream_with_future<S, F>(

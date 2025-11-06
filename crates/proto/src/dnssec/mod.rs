@@ -25,16 +25,13 @@ use crate::trace;
 mod algorithm;
 pub use algorithm::Algorithm;
 
-mod handle;
-pub use handle::DnssecDnsHandle;
-
 /// Cryptographic backend implementations of DNSSEC traits.
 pub mod crypto;
 
 mod ec_public_key;
 
 mod nsec3;
-pub use nsec3::Nsec3HashAlgorithm;
+pub use nsec3::{Nsec3HashAlgorithm, verify_nsec3};
 
 mod proof;
 pub use proof::{Proof, ProofError, ProofErrorKind, ProofFlags, Proven};
@@ -64,6 +61,12 @@ pub use tsig::{TSigResponseContext, TSigner};
 
 mod verifier;
 pub use verifier::Verifier;
+
+mod verify;
+pub use verify::{
+    MAX_RRSIGS_PER_RRSET, Rrset, find_soa_name, proof_log_yield, verify_dnskey, verify_nsec,
+    verify_rrset_with_dnskey, verify_rrsig_with_keys,
+};
 
 /// DNSSEC Delegation Signer (DS) Resource Record (RR) Type Digest Algorithms
 ///
@@ -98,7 +101,8 @@ pub enum DigestType {
 }
 
 impl DigestType {
-    fn is_supported(&self) -> bool {
+    /// FIXME(NET)
+    pub fn is_supported(&self) -> bool {
         !matches!(self, Self::Unknown(_))
     }
 }

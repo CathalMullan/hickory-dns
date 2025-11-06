@@ -25,19 +25,20 @@ use tokio::time::{Duration, Instant, Sleep};
 
 #[cfg(feature = "__dnssec")]
 use hickory_client::client::DnssecClient;
-use hickory_proto::{
-    BufDnsStreamHandle, ProtoError,
-    op::{DnsResponse, Message, SerialMessage},
-    rr::Record,
+use hickory_net::{
+    BufDnsStreamHandle,
     runtime::TokioTime,
-    serialize::binary::{BinDecodable, BinDecoder, BinEncoder},
     xfer::{DnsClientStream, Protocol, StreamReceiver},
 };
 #[cfg(feature = "__dnssec")]
+use hickory_net::{runtime::TokioRuntimeProvider, udp::UdpClientStream};
+#[cfg(feature = "__dnssec")]
+use hickory_proto::dnssec::{PublicKeyBuf, SigningKey, TrustAnchors, crypto::Ed25519SigningKey};
 use hickory_proto::{
-    dnssec::{PublicKeyBuf, SigningKey, TrustAnchors, crypto::Ed25519SigningKey},
-    runtime::TokioRuntimeProvider,
-    udp::UdpClientStream,
+    ProtoError,
+    op::{DnsResponse, Message, SerialMessage},
+    rr::Record,
+    serialize::binary::{BinDecodable, BinDecoder, BinEncoder},
 };
 #[cfg(feature = "__dnssec")]
 use hickory_server::Server;

@@ -28,7 +28,8 @@ use super::{
     sanitize_src_address,
 };
 use crate::{
-    proto::{ProtoError, h2::h2_server, http::Version, rr::Record, xfer::Protocol},
+    net::{h2::h2_server, http::Version, xfer::Protocol},
+    proto::{ProtoError, rr::Record},
     zone_handler::MessageResponse,
 };
 
@@ -210,8 +211,8 @@ impl ResponseHandler for HttpsResponseHandle {
             impl Iterator<Item = &'a Record> + Send + 'a,
         >,
     ) -> io::Result<ResponseInfo> {
-        use crate::proto::h2::HttpsError;
-        use crate::proto::http::response;
+        use crate::net::h2::HttpsError;
+        use crate::net::http::response;
         use crate::proto::serialize::binary::BinEncoder;
 
         let id = response.header().id();

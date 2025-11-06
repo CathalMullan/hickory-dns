@@ -15,7 +15,7 @@ use std::{
 };
 
 #[cfg(feature = "__tls")]
-use crate::proto::rustls::tls_from_stream;
+use crate::net::rustls::tls_from_stream;
 use bytes::Bytes;
 use futures_util::StreamExt;
 use ipnet::IpNet;
@@ -30,23 +30,26 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 #[cfg(feature = "__h3")]
-use crate::proto::h3::h3_server::H3Server;
+use crate::net::h3::h3_server::H3Server;
 #[cfg(feature = "__quic")]
-use crate::proto::quic::QuicServer;
+use crate::net::quic::QuicServer;
 #[cfg(feature = "__tls")]
-use crate::proto::rustls::default_provider;
+use crate::net::rustls::default_provider;
 use crate::{
     access::AccessControl,
-    proto::{
-        BufDnsStreamHandle, ProtoError,
-        op::{Header, LowerQuery, MessageType, ResponseCode, SerialMessage},
-        rr::Record,
+    net::{
+        BufDnsStreamHandle,
         runtime::TokioTime,
         runtime::{TokioRuntimeProvider, iocompat::AsyncIoTokioAsStd},
-        serialize::binary::{BinDecodable, BinDecoder},
         tcp::TcpStream,
         udp::UdpStream,
         xfer::Protocol,
+    },
+    proto::{
+        ProtoError,
+        op::{Header, LowerQuery, MessageType, ResponseCode, SerialMessage},
+        rr::Record,
+        serialize::binary::{BinDecodable, BinDecoder},
     },
     zone_handler::{MessageRequest, MessageResponseBuilder, Queries},
 };

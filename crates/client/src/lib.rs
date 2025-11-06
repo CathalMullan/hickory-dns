@@ -89,10 +89,10 @@
 //! use std::str::FromStr;
 //! use tokio::net::TcpStream as TokioTcpStream;
 //! use hickory_client::client::{Client, ClientHandle};
-//! use hickory_client::proto::runtime::TokioRuntimeProvider;
+//! use hickory_client::net::runtime::TokioRuntimeProvider;
+//! use hickory_client::net::tcp::TcpClientStream;
 //! use hickory_client::proto::rr::{DNSClass, Name, RData, RecordType};
 //! use hickory_client::proto::rr::rdata::A;
-//! use hickory_client::proto::tcp::TcpClientStream;
 //!
 //! #[tokio::main]
 //! async fn main() {
@@ -143,6 +143,7 @@ pub mod client;
 #[cfg(test)]
 mod tests;
 
+pub use hickory_net as net;
 pub use hickory_proto as proto;
 
 /// Returns a version as specified in Cargo.toml

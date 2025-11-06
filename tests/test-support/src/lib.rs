@@ -13,16 +13,18 @@ use std::{
 
 use bytes::Buf;
 use futures_util::{AsyncRead, AsyncWrite};
+use hickory_net::{
+    runtime::{RuntimeProvider, TokioHandle, TokioTime},
+    tcp::DnsTcpStream,
+    udp::DnsUdpSocket,
+};
 use hickory_proto::{
     op::{Message, OpCode, Query, ResponseCode},
     rr::{
         Name, RData, Record, RecordType,
         rdata::{A, NS, SOA},
     },
-    runtime::{RuntimeProvider, TokioHandle, TokioTime},
     serialize::binary::BinDecodable,
-    tcp::DnsTcpStream,
-    udp::DnsUdpSocket,
 };
 use hickory_resolver::config::ProtocolConfig;
 use tracing::{error, info};

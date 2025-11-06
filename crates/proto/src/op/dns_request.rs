@@ -11,9 +11,9 @@ use core::ops::{Deref, DerefMut};
 #[cfg(feature = "std")]
 use core::time::Duration;
 
-use crate::op::{Message, Query};
 #[cfg(feature = "std")]
-use crate::{op::Edns, udp::DEFAULT_RETRY_FLOOR};
+use crate::op::Edns;
+use crate::op::{Message, Query};
 
 /// A set of options for expressing options to how requests should be treated
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,9 +31,8 @@ pub struct DnsRequestOptions {
     /// Randomize case of query name, and check that the response matches, for spoofing resistance.
     #[cfg(feature = "std")]
     pub case_randomization: bool,
-    /// Retry interval for unreliable transport protocols (plain UDP). Any value lower than the
-    /// retry_interval_floor value set by [`crate::udp::UdpClientStreamBuilder`] will effectively
-    /// be ignored, but higher values will result in less frequent retries.
+    // FIXME(NET)
+    /// Retry interval for unreliable transport protocols (plain UDP).
     #[cfg(feature = "std")]
     pub retry_interval: Duration,
 }
@@ -47,9 +46,10 @@ impl Default for DnsRequestOptions {
             recursion_desired: true,
             #[cfg(feature = "std")]
             case_randomization: false,
+            // FIXME(NET)
             // We use the default value for the retry interval floor here as a good starting point.
             #[cfg(feature = "std")]
-            retry_interval: DEFAULT_RETRY_FLOOR,
+            retry_interval: Duration::from_millis(333),
         }
     }
 }

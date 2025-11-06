@@ -120,6 +120,7 @@ tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "std"] }
 hickory-client.workspace = true
 hickory-proto.workspace = true
+hickory-net.workspace = true
 hickory-recursor.workspace = true
 hickory-resolver = { workspace = true, features = ["system-config"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }

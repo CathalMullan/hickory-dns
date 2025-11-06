@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use futures_executor::block_on;
 
+use hickory_net::xfer::Protocol;
 use hickory_proto::{
     dnssec::{
         Algorithm, Verifier,
@@ -13,7 +14,6 @@ use hickory_proto::{
     },
     op::{Header, MessageType, OpCode, Query},
     rr::{DNSClass, Name, RData, Record, RecordType},
-    xfer::Protocol,
 };
 use hickory_server::{
     server::Request,

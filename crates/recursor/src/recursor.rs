@@ -20,10 +20,10 @@ use tracing::warn;
 use crate::recursor_dns_handle::RecursorMetrics;
 use crate::{
     DnssecPolicy, Error,
+    net::runtime::TokioRuntimeProvider,
     proto::{
         access_control::{AccessControlSet, AccessControlSetBuilder},
         op::{Message, Query},
-        runtime::TokioRuntimeProvider,
     },
     recursor_dns_handle::RecursorDnsHandle,
     resolver::{ConnectionProvider, TlsConfig, TtlConfig, config::OpportunisticEncryption},
@@ -31,12 +31,14 @@ use crate::{
 #[cfg(feature = "__dnssec")]
 use crate::{
     ErrorKind,
+    net::{
+        dnssec::DnssecDnsHandle,
+        xfer::{DnsHandle as _, FirstAnswer as _},
+    },
     proto::{
         DnsError, NoRecords, ProtoError,
-        dnssec::DnssecDnsHandle,
         op::{DnsRequestOptions, ResponseCode},
         rr::RecordType,
-        xfer::{DnsHandle as _, FirstAnswer as _},
     },
     resolver::ResponseCache,
 };
@@ -580,10 +582,10 @@ mod for_dnssec {
     };
 
     use crate::ErrorKind;
+    use crate::net::xfer::DnsHandle;
     use crate::proto::{
         ProtoError,
         op::{DnsRequest, DnsResponse, Message, OpCode},
-        xfer::DnsHandle,
     };
     use crate::recursor_dns_handle::RecursorDnsHandle;
     use crate::resolver::ConnectionProvider;

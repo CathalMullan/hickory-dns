@@ -14,6 +14,7 @@ use std::{
 };
 
 use hickory_client::client::{Client, ClientHandle};
+use hickory_net::{runtime::TokioRuntimeProvider, udp::UdpClientStream};
 use hickory_proto::{
     dnssec::{
         PublicKeyBuf, SigSigner, SigningKey, TrustAnchors, crypto::Ed25519SigningKey, rdata::DNSKEY,
@@ -23,8 +24,6 @@ use hickory_proto::{
         DNSClass, RData, Record, RecordType,
         rdata::{A, SOA},
     },
-    runtime::TokioRuntimeProvider,
-    udp::UdpClientStream,
 };
 use hickory_resolver::{
     Name,

@@ -36,17 +36,19 @@ use rustls::{
 
 use hickory_client::client::{Client, ClientHandle};
 #[cfg(any(feature = "__tls", feature = "__https"))]
-use hickory_proto::rustls::client_config;
+use hickory_net::rustls::client_config;
 #[cfg(feature = "__tls")]
-use hickory_proto::rustls::tls_client_connect;
+use hickory_net::rustls::tls_client_connect;
+use hickory_net::{
+    runtime::{RuntimeProvider, TokioRuntimeProvider},
+    tcp::TcpClientStream,
+    udp::UdpClientStream,
+};
 use hickory_proto::{
     ProtoError,
     op::DnsResponse,
     rr::{DNSClass, Name, RData, RecordSet, RecordType},
-    runtime::{RuntimeProvider, TokioRuntimeProvider},
     serialize::txt::RDataParser,
-    tcp::TcpClientStream,
-    udp::UdpClientStream,
 };
 #[cfg(feature = "__dnssec")]
 use hickory_proto::{
@@ -523,7 +525,7 @@ async fn https<P: RuntimeProvider>(
     opts: Opts,
     provider: P,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use hickory_proto::h2::HttpsClientStreamBuilder;
+    use hickory_net::h2::HttpsClientStreamBuilder;
 
     let nameserver = opts.nameserver;
     let alpn = opts
@@ -567,7 +569,7 @@ async fn quic(_opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(feature = "__quic")]
 async fn quic(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
-    use hickory_proto::quic::QuicClientStream;
+    use hickory_net::quic::QuicClientStream;
 
     let nameserver = opts.nameserver;
     let alpn = opts
@@ -606,7 +608,7 @@ async fn h3(_opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(feature = "__h3")]
 async fn h3(opts: Opts) -> Result<(), Box<dyn std::error::Error>> {
-    use hickory_proto::h3::H3ClientStream;
+    use hickory_net::h3::H3ClientStream;
 
     let nameserver = opts.nameserver;
     let alpn = opts

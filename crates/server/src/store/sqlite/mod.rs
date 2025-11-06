@@ -42,10 +42,10 @@ use crate::{
 };
 use crate::{
     error::{PersistenceError, PersistenceErrorKind},
+    net::runtime::{RuntimeProvider, TokioRuntimeProvider},
     proto::{
         op::{ResponseCode, ResponseSigner},
         rr::{DNSClass, LowerName, Name, RData, Record, RecordSet, RecordType, RrKey},
-        runtime::{RuntimeProvider, TokioRuntimeProvider},
     },
     server::{Request, RequestInfo},
     store::{

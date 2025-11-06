@@ -567,7 +567,25 @@ name = "hickory-client"
 version = "0.26.0-alpha.1"
 dependencies = [
  "futures-util",
+ "hickory-net",
  "hickory-proto",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "hickory-net"
+version = "0.26.0-alpha.1"
+dependencies = [
+ "async-trait",
+ "cfg-if",
+ "futures-channel",
+ "futures-io",
+ "futures-util",
+ "hickory-proto",
+ "once_cell",
+ "rand",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
 ]
@@ -576,15 +594,11 @@ dependencies = [
 name = "hickory-proto"
 version = "0.26.0-alpha.1"
 dependencies = [
- "async-trait",
  "aws-lc-rs",
  "bitflags",
  "cfg-if",
  "data-encoding",
  "enum-as-inner",
- "futures-channel",
- "futures-io",
- "futures-util",
  "idna",
  "ipnet",
  "jni",
@@ -595,7 +609,6 @@ dependencies = [
  "thiserror 2.0.17",
  "time",
  "tinyvec",
- "tokio",
  "tracing",
  "url",
 ]
@@ -1269,6 +1282,7 @@ dependencies = [
  "data-encoding",
  "futures",
  "hickory-client",
+ "hickory-net",
  "hickory-proto",
  "time",
  "tokio",

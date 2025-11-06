@@ -22,16 +22,15 @@ use super::{
     sanitize_src_address,
 };
 use crate::{
-    proto::{
-        ProtoError,
+    net::{
         h3::{
             H3Error,
             h3_server::{H3Connection, H3Server},
         },
         http::Version,
-        rr::Record,
         xfer::Protocol,
     },
+    proto::{ProtoError, rr::Record},
     zone_handler::MessageResponse,
 };
 
@@ -182,7 +181,7 @@ impl ResponseHandler for H3ResponseHandle {
             impl Iterator<Item = &'a Record> + Send + 'a,
         >,
     ) -> io::Result<ResponseInfo> {
-        use crate::proto::http::response;
+        use crate::net::http::response;
         use crate::proto::serialize::binary::BinEncoder;
 
         let id = response.header().id();

@@ -68,6 +68,7 @@ thiserror.workspace = true
 tracing.workspace = true
 tokio = { workspace = true, features = ["net"] }
 hickory-proto = { workspace = true, features = ["access-control"] }
+hickory-net = { workspace = true, features = ["access-control"] }
 hickory-resolver = { workspace = true, features = ["tokio"] }
 
 [dev-dependencies]

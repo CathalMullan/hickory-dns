@@ -94,6 +94,7 @@ toml.workspace = true
 hex.workspace = true
 hickory-client.workspace = true
 hickory-proto.workspace = true
+hickory-net.workspace = true
 hickory-server = { workspace = true, features = ["toml"] }
 hostname.workspace = true
 metrics = { workspace = true, optional = true }

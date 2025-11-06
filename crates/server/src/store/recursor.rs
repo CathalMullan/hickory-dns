@@ -28,11 +28,11 @@ use tracing::{debug, info};
 use crate::{dnssec::NxProofKind, proto::dnssec::TrustAnchors, zone_handler::Nsec3QueryInfo};
 use crate::{
     error::ConfigError,
+    net::runtime::RuntimeProvider,
     proto::{
         op::Query,
         op::ResponseSigner,
         rr::{LowerName, Name, RData, Record, RecordSet, RecordType},
-        runtime::RuntimeProvider,
         serialize::txt::{ParseError, Parser},
     },
     recursor::{DnssecPolicy, Recursor},

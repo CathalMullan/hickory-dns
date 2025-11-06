@@ -44,9 +44,9 @@ use std::str::FromStr;
 
 use hickory_client::client::{Client, ClientHandle};
 use hickory_client::proto::rr::{DNSClass, Name, Record, RecordType};
-use hickory_client::proto::runtime::TokioRuntimeProvider;
-use hickory_client::proto::udp::UdpClientStream;
-use hickory_client::proto::xfer::DnsResponse;
+use hickory_client::net::runtime::TokioRuntimeProvider;
+use hickory_client::net::udp::UdpClientStream;
+use hickory_client::net::xfer::DnsResponse;
 
 let address = SocketAddr::from(([8, 8, 8, 8], 53));
 let conn = UdpClientStream::builder(address, TokioRuntimeProvider::default()).build();

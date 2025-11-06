@@ -89,7 +89,7 @@ mod tests {
     use futures::future;
     use futures_util::stream::once;
 
-    use crate::proto::xfer::FirstAnswer;
+    use crate::net::xfer::FirstAnswer;
     use crate::proto::{ProtoError, ProtoErrorKind};
 
     use super::*;

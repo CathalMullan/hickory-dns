@@ -16,14 +16,14 @@ use time::Duration;
 
 use hickory_client::client::Client;
 use hickory_client::client::ClientHandle;
+use hickory_client::net::runtime::TokioRuntimeProvider;
+use hickory_client::net::udp::UdpClientStream;
 use hickory_client::proto::dnssec::crypto::RsaSigningKey;
 use hickory_client::proto::dnssec::rdata::key::{KEY, KeyUsage};
 use hickory_client::proto::dnssec::{Algorithm, SigSigner, SigningKey};
 use hickory_client::proto::op::ResponseCode;
 use hickory_client::proto::rr::rdata::A;
 use hickory_client::proto::rr::{DNSClass, Name, RData, Record, RecordType};
-use hickory_client::proto::runtime::TokioRuntimeProvider;
-use hickory_client::proto::udp::UdpClientStream;
 use hickory_compatibility::named_process;
 
 #[tokio::test]

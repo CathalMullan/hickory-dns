@@ -4,12 +4,14 @@ use std::{
     sync::{Arc, Mutex as StdMutex},
 };
 
+use hickory_net::{
+    runtime::TokioRuntimeProvider,
+    xfer::{DnsExchange, DnsMultiplexer},
+};
 use hickory_proto::{
     DnsError,
     op::{DnsResponse, Query},
     rr::{DNSClass, Name, RData, Record, RecordType, rdata::A},
-    runtime::TokioRuntimeProvider,
-    xfer::{DnsExchange, DnsMultiplexer},
 };
 use hickory_resolver::{
     Hosts, LookupFuture, caching_client::CachingClient, config::LookupIpStrategy, lookup::Lookup,

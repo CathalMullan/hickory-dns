@@ -1,8 +1,8 @@
 use hickory_client::client::ClientHandle;
+use hickory_net::xfer::DnsHandle;
 use hickory_proto::op::DnsRequest;
 #[cfg(feature = "__dnssec")]
 use hickory_proto::op::Edns;
-use hickory_proto::xfer::DnsHandle;
 #[cfg(feature = "__dnssec")]
 use hickory_server::zone_handler::LookupOptions;
 

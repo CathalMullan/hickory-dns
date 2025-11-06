@@ -10,7 +10,7 @@
 //  then, if requested, do a recursive lookup... i.e. the catalog would only point to files.
 use std::{collections::HashMap, iter, sync::Arc};
 
-use hickory_proto::runtime::Time;
+use hickory_net::runtime::Time;
 use tracing::{debug, error, info, trace, warn};
 
 #[cfg(feature = "metrics")]

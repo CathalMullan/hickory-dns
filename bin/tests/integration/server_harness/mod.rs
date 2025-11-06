@@ -20,14 +20,16 @@ use tracing::{info, warn};
 #[cfg(feature = "__dnssec")]
 use hickory_client::client::Client;
 use hickory_client::client::ClientHandle;
+#[cfg(feature = "__dnssec")]
+use hickory_net::runtime::TokioRuntimeProvider;
+use hickory_net::xfer::Protocol;
+#[cfg(feature = "__dnssec")]
+use hickory_proto::dnssec::Algorithm;
 use hickory_proto::{
     ProtoError,
     op::{DnsResponse, ResponseCode},
     rr::{DNSClass, Name, RData, RecordType, rdata::A},
-    xfer::Protocol,
 };
-#[cfg(feature = "__dnssec")]
-use hickory_proto::{dnssec::Algorithm, runtime::TokioRuntimeProvider};
 
 #[derive(Debug, Default)]
 pub struct SocketPort {

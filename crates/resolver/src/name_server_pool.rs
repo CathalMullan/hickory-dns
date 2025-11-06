@@ -34,6 +34,10 @@ use crate::config::{
 };
 use crate::connection_provider::{ConnectionProvider, TlsConfig};
 use crate::name_server::{ConnectionPolicy, NameServer};
+use crate::net::{
+    runtime::{RuntimeProvider, Time},
+    xfer::{DnsHandle, Protocol},
+};
 use crate::proto::{
     DnsError, NoRecords, ProtoError, ProtoErrorKind,
     access_control::AccessControlSet,
@@ -45,8 +49,6 @@ use crate::proto::{
             opt::{ClientSubnet, EdnsCode, EdnsOption},
         },
     },
-    runtime::{RuntimeProvider, Time},
-    xfer::{DnsHandle, Protocol},
 };
 
 /// Abstract interface for mocking purpose
@@ -678,10 +680,10 @@ mod tests {
 
     use super::*;
     use crate::config::{NameServerConfig, ResolverConfig};
+    use crate::net::runtime::TokioRuntimeProvider;
+    use crate::net::xfer::{DnsHandle, FirstAnswer};
     use crate::proto::op::{DnsRequestOptions, Query};
     use crate::proto::rr::{Name, RecordType};
-    use crate::proto::runtime::TokioRuntimeProvider;
-    use crate::proto::xfer::{DnsHandle, FirstAnswer};
 
     #[ignore]
     // because of there is a real connection that needs a reasonable timeout
