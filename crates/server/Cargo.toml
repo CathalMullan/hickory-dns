@@ -92,7 +92,7 @@ h3-ring = [
 ]
 
 __tls = ["dep:rustls", "dep:tokio-rustls"]
-__https = ["dep:h2", "dep:http", "__tls"]
+__https = ["dep:h2", "__tls"]
 __quic = ["__tls"]
 __h3 = ["dep:h3", "dep:h3-quinn", "__quic"]
 
@@ -120,7 +120,6 @@ futures-util = { workspace = true, default-features = false, features = ["std"] 
 h2 = { workspace = true, features = ["stream"], optional = true }
 h3 = { workspace = true, optional = true }
 h3-quinn = { workspace = true, optional = true }
-http = { workspace = true, optional = true }
 ipnet = { workspace = true, features = ["serde", "std"] }
 prefix-trie.workspace = true
 rusqlite = { workspace = true, features = ["bundled", "time"], optional = true }
@@ -141,7 +140,6 @@ metrics = { workspace = true, optional = true }
 futures-executor = { workspace = true, default-features = false, features = ["std"] }
 test-support.workspace = true
 tokio = { workspace = true, features = ["macros", "rt"] }
-tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "std"] }
 
 [package.metadata.docs.rs]
 all-features = true

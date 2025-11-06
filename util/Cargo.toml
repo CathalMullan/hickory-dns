@@ -31,48 +31,48 @@ maintenance = { status = "actively-developed" }
 
 [features]
 tls-aws-lc-rs = [
-    "hickory-proto/tls-aws-lc-rs",
     "hickory-client/tls-aws-lc-rs",
     "hickory-resolver/tls-aws-lc-rs",
     "__tls",
 ]
 https-aws-lc-rs = [
-    "hickory-proto/https-aws-lc-rs",
     "hickory-client/https-aws-lc-rs",
     "hickory-resolver/https-aws-lc-rs",
     "tls-aws-lc-rs",
     "__https",
 ]
 quic-aws-lc-rs = [
+    "hickory-client/quic-aws-lc-rs",
     "hickory-resolver/quic-aws-lc-rs",
     "tls-aws-lc-rs",
     "__quic",
 ]
 h3-aws-lc-rs = [
+    "hickory-client/h3-aws-lc-rs",
     "hickory-resolver/h3-aws-lc-rs",
     "quic-aws-lc-rs",
     "__h3",
 ]
 
 tls-ring = [
-    "hickory-proto/tls-ring",
     "hickory-client/tls-ring",
     "hickory-resolver/tls-ring",
     "__tls",
 ]
 https-ring = [
-    "hickory-proto/https-ring",
     "hickory-client/https-ring",
     "hickory-resolver/https-ring",
     "tls-ring",
     "__https",
 ]
 quic-ring = [
+    "hickory-client/quic-ring",
     "hickory-resolver/quic-ring",
     "tls-ring",
     "__quic",
 ]
 h3-ring = [
+    "hickory-client/h3-ring",
     "hickory-resolver/h3-ring",
     "quic-ring",
     "__h3",
@@ -84,19 +84,24 @@ __quic = []
 __h3 = []
 
 webpki-roots = [
-    "dep:webpki-roots",
-    "hickory-proto/webpki-roots",
     "hickory-client/webpki-roots",
     "hickory-resolver/webpki-roots",
 ]
 rustls-platform-verifier = [
-    "hickory-proto/rustls-platform-verifier",
     "hickory-client/rustls-platform-verifier",
     "hickory-resolver/rustls-platform-verifier",
 ]
 
-dnssec-aws-lc-rs = ["hickory-client/dnssec-aws-lc-rs", "hickory-proto/dnssec-aws-lc-rs", "hickory-resolver/dnssec-aws-lc-rs", "__dnssec"]
-dnssec-ring = ["hickory-client/dnssec-ring", "hickory-proto/dnssec-ring", "hickory-resolver/dnssec-ring", "__dnssec"]
+dnssec-aws-lc-rs = [
+    "hickory-client/dnssec-aws-lc-rs",
+    "hickory-resolver/dnssec-aws-lc-rs",
+    "__dnssec"
+]
+dnssec-ring = [
+    "hickory-client/dnssec-ring",
+    "hickory-resolver/dnssec-ring",
+    "__dnssec"
+]
 __dnssec = []
 
 [dependencies]
@@ -110,7 +115,6 @@ clap = { workspace = true, default-features = false, features = [
     "usage",
 ] }
 console.workspace = true
-data-encoding.workspace = true
 rustls = { workspace = true, optional = true }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "std"] }
@@ -119,7 +123,6 @@ hickory-proto.workspace = true
 hickory-recursor.workspace = true
 hickory-resolver = { workspace = true, features = ["system-config"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
-webpki-roots = { workspace = true, optional = true }
 
 [package.metadata.cargo-all-features]
 skip_optional_dependencies = true

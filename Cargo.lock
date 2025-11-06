@@ -779,21 +779,12 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 name = "hickory-client"
 version = "0.26.0-alpha.1"
 dependencies = [
- "cfg-if",
- "data-encoding",
  "futures",
- "futures-channel",
  "futures-util",
  "hickory-proto",
- "once_cell",
- "rand",
- "serde",
  "test-support",
- "thiserror 2.0.17",
  "tokio",
  "tracing",
- "tracing-subscriber",
- "webpki-roots",
 ]
 
 [[package]]
@@ -814,7 +805,6 @@ dependencies = [
 name = "hickory-dns"
 version = "0.26.0-alpha.1"
 dependencies = [
- "bytes",
  "cfg-if",
  "clap",
  "futures-executor",
@@ -822,7 +812,6 @@ dependencies = [
  "hex",
  "hickory-client",
  "hickory-proto",
- "hickory-resolver",
  "hickory-server",
  "hostname",
  "http",
@@ -862,9 +851,7 @@ dependencies = [
  "hickory-proto",
  "hickory-resolver",
  "hickory-server",
- "once_cell",
  "pretty_assertions",
- "rand",
  "rusqlite",
  "rustls",
  "rustls-pki-types",
@@ -902,7 +889,6 @@ dependencies = [
  "jni",
  "js-sys",
  "once_cell",
- "pin-project-lite",
  "prefix-trie",
  "quinn",
  "rand",
@@ -929,9 +915,6 @@ name = "hickory-recursor"
 version = "0.26.0-alpha.1"
 dependencies = [
  "async-recursion",
- "async-trait",
- "backtrace",
- "bytes",
  "cfg-if",
  "enum-as-inner",
  "futures-util",
@@ -942,20 +925,16 @@ dependencies = [
  "metrics",
  "metrics-util",
  "parking_lot",
- "serde",
  "test-support",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
 name = "hickory-resolver"
 version = "0.26.0-alpha.1"
 dependencies = [
- "backtrace",
- "cfg-if",
  "futures-executor",
  "futures-util",
  "hickory-proto",
@@ -968,7 +947,6 @@ dependencies = [
  "ndk-context",
  "once_cell",
  "parking_lot",
- "quinn",
  "rand",
  "resolv-conf",
  "rustls",
@@ -977,13 +955,10 @@ dependencies = [
  "smallvec",
  "system-configuration",
  "test-support",
- "thiserror 2.0.17",
  "tokio",
- "tokio-rustls",
  "toml",
  "tracing",
  "tracing-subscriber",
- "webpki-roots",
 ]
 
 [[package]]
@@ -1003,7 +978,6 @@ dependencies = [
  "hickory-proto",
  "hickory-recursor",
  "hickory-resolver",
- "http",
  "ipnet",
  "metrics",
  "prefix-trie",
@@ -1018,7 +992,6 @@ dependencies = [
  "tokio-util",
  "toml",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -1027,7 +1000,6 @@ version = "0.26.0-alpha.1"
 dependencies = [
  "clap",
  "console",
- "data-encoding",
  "hickory-client",
  "hickory-proto",
  "hickory-recursor",
@@ -1036,7 +1008,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "webpki-roots",
 ]
 
 [[package]]
@@ -2485,7 +2456,6 @@ dependencies = [
  "futures-util",
  "hickory-proto",
  "hickory-resolver",
- "tokio",
  "tracing",
  "tracing-subscriber",
 ]

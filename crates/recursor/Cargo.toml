@@ -30,58 +30,24 @@ categories.workspace = true
 license.workspace = true
 
 [features]
-backtrace = ["dep:backtrace", "hickory-proto/backtrace", "hickory-resolver/backtrace"]
+backtrace = ["hickory-resolver/backtrace"]
 metrics = ["dep:metrics"]
 
-dnssec-aws-lc-rs = ["hickory-proto/dnssec-aws-lc-rs", "hickory-resolver/dnssec-aws-lc-rs", "__dnssec"]
-dnssec-ring = ["hickory-proto/dnssec-ring", "hickory-resolver/dnssec-ring", "__dnssec"]
+dnssec-aws-lc-rs = ["hickory-resolver/dnssec-aws-lc-rs", "__dnssec"]
+dnssec-ring = ["hickory-resolver/dnssec-ring", "__dnssec"]
 __dnssec = []
 
-tls-aws-lc-rs = [
-    "hickory-proto/tls-aws-lc-rs",
-    "hickory-resolver/tls-aws-lc-rs",
-]
-https-aws-lc-rs = [
-    "hickory-proto/https-aws-lc-rs",
-    "hickory-resolver/https-aws-lc-rs",
-    "tls-aws-lc-rs",
-]
-quic-aws-lc-rs = [
-    "hickory-proto/quic-aws-lc-rs",
-    "hickory-resolver/quic-aws-lc-rs",
-    "tls-aws-lc-rs",
-]
-h3-aws-lc-rs = [
-    "hickory-proto/h3-aws-lc-rs",
-    "hickory-resolver/h3-aws-lc-rs",
-    "quic-aws-lc-rs",
-]
+tls-aws-lc-rs = ["hickory-resolver/tls-aws-lc-rs"]
+https-aws-lc-rs = ["hickory-resolver/https-aws-lc-rs", "tls-aws-lc-rs"]
+quic-aws-lc-rs = ["hickory-resolver/quic-aws-lc-rs", "tls-aws-lc-rs"]
+h3-aws-lc-rs = ["hickory-resolver/h3-aws-lc-rs", "quic-aws-lc-rs"]
 
-tls-ring = [
-    "hickory-proto/tls-ring",
-    "hickory-resolver/tls-ring",
-]
-https-ring = [
-    "hickory-proto/https-ring",
-    "hickory-resolver/https-ring",
-    "tls-ring",
-]
-quic-ring = [
-    "hickory-proto/quic-ring",
-    "hickory-resolver/quic-ring",
-    "tls-ring",
-]
-h3-ring = [
-    "hickory-proto/h3-ring",
-    "hickory-resolver/h3-ring",
-    "quic-ring",
-]
+tls-ring = ["hickory-resolver/tls-ring"]
+https-ring = ["hickory-resolver/https-ring", "tls-ring"]
+quic-ring = ["hickory-resolver/quic-ring", "tls-ring"]
+h3-ring = ["hickory-resolver/h3-ring", "quic-ring"]
 
-serde = [
-    "dep:serde",
-    "hickory-proto/serde",
-    "hickory-resolver/serde",
-]
+serde = ["hickory-resolver/serde"]
 
 testing = []
 
@@ -90,10 +56,7 @@ name = "hickory_recursor"
 path = "src/lib.rs"
 
 [dependencies]
-async-trait.workspace = true
 async-recursion.workspace = true
-backtrace = { workspace = true, optional = true }
-bytes.workspace = true
 cfg-if.workspace = true
 enum-as-inner.workspace = true
 futures-util = { workspace = true, default-features = false, features = ["std"] }
@@ -101,7 +64,6 @@ ipnet.workspace = true
 lru-cache.workspace = true
 metrics = { workspace = true, optional = true }
 parking_lot.workspace = true
-serde = { workspace = true, features = ["derive"], optional = true }
 thiserror.workspace = true
 tracing.workspace = true
 tokio = { workspace = true, features = ["net"] }
@@ -112,7 +74,6 @@ hickory-resolver = { workspace = true, features = ["tokio"] }
 futures-util = { workspace = true, features = ["io"] }
 metrics-util = { workspace = true, features = ["debugging"] }
 tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
-tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "std"] }
 test-support.workspace = true
 
 [package.metadata.docs.rs]

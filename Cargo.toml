@@ -63,7 +63,6 @@ futures-util = { version = "0.3.5", default-features = false }
 tokio = "1.21"
 tokio-util = "0.7.9"
 parking_lot = "0.12"
-pin-project-lite = "0.2"
 
 
 # cryptography

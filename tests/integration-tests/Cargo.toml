@@ -39,7 +39,6 @@ dnssec-aws-lc-rs = [
     "hickory-resolver/dnssec-aws-lc-rs",
     "hickory-server/dnssec-aws-lc-rs",
     "hickory-client/dnssec-aws-lc-rs",
-    "hickory-proto/dnssec-aws-lc-rs",
     "dep:rustls-pki-types",
     "__dnssec",
 ]
@@ -47,55 +46,60 @@ dnssec-ring = [
     "hickory-resolver/dnssec-ring",
     "hickory-server/dnssec-ring",
     "hickory-client/dnssec-ring",
-    "hickory-proto/dnssec-ring",
     "dep:rustls-pki-types",
     "__dnssec",
 ]
 __dnssec = []
 
 tls-aws-lc-rs = [
-    "hickory-proto/tls-aws-lc-rs",
     "hickory-resolver/tls-aws-lc-rs",
     "hickory-server/tls-aws-lc-rs",
+    "hickory-client/tls-aws-lc-rs",
     "__tls",
 ]
 https-aws-lc-rs = [
-    "hickory-client/https-aws-lc-rs",
     "hickory-resolver/https-aws-lc-rs",
+    "hickory-server/https-aws-lc-rs",
+    "hickory-client/https-aws-lc-rs",
     "tls-aws-lc-rs",
     "__https",
 ]
 quic-aws-lc-rs = [
-    "hickory-proto/quic-aws-lc-rs",
     "hickory-resolver/quic-aws-lc-rs",
+    "hickory-server/quic-aws-lc-rs",
+    "hickory-client/quic-aws-lc-rs",
     "tls-aws-lc-rs",
 ]
 h3-aws-lc-rs = [
-    "hickory-proto/h3-aws-lc-rs",
     "hickory-resolver/h3-aws-lc-rs",
+    "hickory-server/h3-aws-lc-rs",
+    "hickory-client/h3-aws-lc-rs",
     "quic-aws-lc-rs",
 ]
 
 tls-ring = [
-    "hickory-proto/tls-ring",
     "hickory-resolver/tls-ring",
     "hickory-server/tls-ring",
+    "hickory-client/tls-ring",
     "__tls",
 ]
 https-ring = [
-    "hickory-client/https-ring",
     "hickory-resolver/https-ring",
+    "hickory-server/https-ring",
+    "hickory-client/https-ring",
     "tls-ring",
     "__https",
 ]
 quic-ring = [
-    "hickory-proto/quic-ring",
     "hickory-resolver/quic-ring",
+    "hickory-server/quic-ring",
+    "hickory-client/quic-ring",
     "tls-ring",
 ]
 h3-ring = [
-    "hickory-proto/h3-ring",
     "hickory-resolver/h3-ring",
+    "hickory-server/h3-ring",
+    "hickory-client/h3-ring",
     "quic-ring",
 ]
 
@@ -108,8 +112,6 @@ metrics = ["hickory-server/metrics"]
 [dependencies]
 async-trait.workspace = true
 futures = { workspace = true, features = ["executor"] }
-once_cell.workspace = true
-rand.workspace = true
 rusqlite = { workspace = true, features = ["bundled"], optional = true }
 rustls = { workspace = true, optional = true }
 rustls-pki-types = { workspace = true, optional = true }

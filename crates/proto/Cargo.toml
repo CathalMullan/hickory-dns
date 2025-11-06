@@ -51,7 +51,7 @@ h3-ring = ["quic-ring", "__h3"]
 
 __tls = ["dep:bytes", "dep:rustls", "dep:tokio-rustls", "std", "tokio"]
 __https = ["dep:bytes", "dep:h2", "dep:http", "std"]
-__quic = ["dep:bytes", "dep:pin-project-lite", "dep:quinn", "std"]
+__quic = ["dep:bytes", "dep:quinn", "std"]
 __h3 = ["dep:h3", "dep:h3-quinn", "dep:http", "std"]
 
 rustls-platform-verifier = ["dep:rustls-platform-verifier", "std"]
@@ -104,7 +104,6 @@ idna.workspace = true
 ipnet.workspace = true
 js-sys = { workspace = true, optional = true }
 once_cell = { workspace = true }
-pin-project-lite = { workspace = true, optional = true }
 prefix-trie = {  workspace = true, optional = true }
 quinn = { workspace = true, optional = true, features = ["log", "runtime-tokio"] }
 rand = { workspace = true, features = ["std_rng"] }

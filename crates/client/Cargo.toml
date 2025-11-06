@@ -49,7 +49,7 @@ dnssec-aws-lc-rs = ["hickory-proto/dnssec-aws-lc-rs", "__dnssec"]
 dnssec-ring = ["hickory-proto/dnssec-ring", "__dnssec"]
 __dnssec = []
 
-serde = ["dep:serde", "hickory-proto/serde"]
+serde = ["hickory-proto/serde"]
 
 # enables experimental the mDNS (multicast) feature
 mdns = ["hickory-proto/mdns"]
@@ -59,14 +59,7 @@ name = "hickory_client"
 path = "src/lib.rs"
 
 [dependencies]
-cfg-if.workspace = true
-data-encoding.workspace = true
-futures-channel = { workspace = true, default-features = false, features = ["std"] }
 futures-util = { workspace = true, default-features = false, features = ["std"] }
-once_cell.workspace = true
-rand.workspace = true
-serde = { workspace = true, features = ["derive"], optional = true }
-thiserror.workspace = true
 tracing.workspace = true
 tokio = { workspace = true, features = ["rt", "net"] }
 hickory-proto = { workspace = true, features = ["text-parsing", "tokio"] }
@@ -75,8 +68,6 @@ hickory-proto = { workspace = true, features = ["text-parsing", "tokio"] }
 futures = { workspace = true, default-features = false, features = ["std", "executor"] }
 test-support.workspace = true
 tokio = { workspace = true, features = ["rt", "macros"] }
-tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "std"] }
-webpki-roots = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true
