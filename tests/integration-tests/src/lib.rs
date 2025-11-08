@@ -26,7 +26,7 @@ use tokio::time::{Duration, Instant, Sleep};
 #[cfg(feature = "__dnssec")]
 use hickory_client::client::DnssecClient;
 use hickory_net::{
-    BufDnsStreamHandle,
+    BufDnsStreamHandle, NetError,
     runtime::TokioTime,
     xfer::{DnsClientStream, Protocol, StreamReceiver},
 };
@@ -35,7 +35,6 @@ use hickory_net::{runtime::TokioRuntimeProvider, udp::UdpClientStream};
 #[cfg(feature = "__dnssec")]
 use hickory_proto::dnssec::{PublicKeyBuf, SigningKey, TrustAnchors, crypto::Ed25519SigningKey};
 use hickory_proto::{
-    ProtoError,
     op::{DnsResponse, Message, SerialMessage},
     rr::Record,
     serialize::binary::{BinDecodable, BinDecoder, BinEncoder},
@@ -148,7 +147,7 @@ impl DnsClientStream for TestClientStream {
 }
 
 impl Stream for TestClientStream {
-    type Item = Result<SerialMessage, ProtoError>;
+    type Item = Result<SerialMessage, NetError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         use futures::executor::block_on;
@@ -230,7 +229,7 @@ impl DnsClientStream for NeverReturnsClientStream {
 }
 
 impl Stream for NeverReturnsClientStream {
-    type Item = Result<SerialMessage, ProtoError>;
+    type Item = Result<SerialMessage, NetError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         // poll the timer forever...

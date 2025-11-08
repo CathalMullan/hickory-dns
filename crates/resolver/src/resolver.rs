@@ -18,6 +18,7 @@ use futures_util::{
     future::{self, BoxFuture},
     lock::Mutex as AsyncMutex,
 };
+use hickory_net::NetError;
 use tracing::debug;
 
 use crate::cache::{MAX_TTL, ResponseCache, TtlConfig};
@@ -51,7 +52,7 @@ macro_rules! lookup_fn {
         /// # Arguments
         ///
         /// * `query` - a string which parses to a domain name, failure to parse will return an error
-        pub async fn $p(&self, query: impl IntoName) -> Result<TypedLookup<$l>, ProtoError> {
+        pub async fn $p(&self, query: impl IntoName) -> Result<TypedLookup<$l>, NetError> {
             self.inner_lookup(query.into_name()?, $r, self.request_options())
                 .await
         }
@@ -69,7 +70,7 @@ impl TokioResolver {
     /// This will use `/etc/resolv.conf` on Unix OSes and the registry on Windows.
     #[cfg(any(unix, target_os = "windows"))]
     #[cfg(feature = "system-config")]
-    pub fn builder_tokio() -> Result<ResolverBuilder<TokioRuntimeProvider>, ProtoError> {
+    pub fn builder_tokio() -> Result<ResolverBuilder<TokioRuntimeProvider>, NetError> {
         Self::builder(TokioRuntimeProvider::default())
     }
 }
@@ -105,7 +106,7 @@ impl<R: ConnectionProvider> Resolver<R> {
     /// This will use `/etc/resolv.conf` on Unix OSes and the registry on Windows.
     #[cfg(any(unix, target_os = "windows"))]
     #[cfg(feature = "system-config")]
-    pub fn builder(provider: R) -> Result<ResolverBuilder<R>, ProtoError> {
+    pub fn builder(provider: R) -> Result<ResolverBuilder<R>, NetError> {
         let (config, options) = super::system_conf::read_system_conf()?;
         let mut builder = Self::builder_with_config(config, provider);
         *builder.options_mut() = options;
@@ -151,7 +152,7 @@ impl<R: ConnectionProvider> Resolver<R> {
         &self,
         name: impl IntoName,
         record_type: RecordType,
-    ) -> Result<Lookup, ProtoError> {
+    ) -> Result<Lookup, NetError> {
         self.inner_lookup(name.into_name()?, record_type, self.request_options())
             .await
     }
@@ -161,7 +162,7 @@ impl<R: ConnectionProvider> Resolver<R> {
         name: Name,
         record_type: RecordType,
         options: DnsRequestOptions,
-    ) -> Result<L, ProtoError>
+    ) -> Result<L, NetError>
     where
         L: From<Lookup> + Send + Sync + 'static,
     {
@@ -183,7 +184,7 @@ impl<R: ConnectionProvider> Resolver<R> {
     ///
     /// # Arguments
     /// * `host` - string hostname, if this is an invalid hostname, an error will be returned.
-    pub async fn lookup_ip(&self, host: impl IntoName) -> Result<LookupIp, ProtoError> {
+    pub async fn lookup_ip(&self, host: impl IntoName) -> Result<LookupIp, NetError> {
         let mut finally_ip_addr = None;
         let maybe_ip = host.to_ip().map(RData::from);
         let maybe_name = host.into_name();
@@ -214,7 +215,7 @@ impl<R: ConnectionProvider> Resolver<R> {
                 let lookup = Lookup::new_with_max_ttl(query, Arc::from([ip_addr.clone()]));
                 return Ok(lookup.into());
             }
-            (Err(err), None) => return Err(err),
+            (Err(err), None) => return Err(err)?,
         };
 
         let names = self.build_names(name);
@@ -354,7 +355,7 @@ enum LookupEither<P: ConnectionProvider> {
 }
 
 impl<P: ConnectionProvider> DnsHandle for LookupEither<P> {
-    type Response = Pin<Box<dyn Stream<Item = Result<DnsResponse, ProtoError>> + Send>>;
+    type Response = Pin<Box<dyn Stream<Item = Result<DnsResponse, NetError>> + Send>>;
     type Runtime = P::RuntimeProvider;
 
     fn is_verifying_dnssec(&self) -> bool {
@@ -461,7 +462,7 @@ impl<P: ConnectionProvider> ResolverBuilder<P> {
     }
 
     /// Construct the resolver.
-    pub fn build(self) -> Result<Resolver<P>, ProtoError> {
+    pub fn build(self) -> Result<Resolver<P>, NetError> {
         #[cfg_attr(not(feature = "__dnssec"), allow(unused_mut))]
         let Self {
             config:
@@ -554,7 +555,7 @@ where
     names: Vec<Name>,
     record_type: RecordType,
     options: DnsRequestOptions,
-    query: BoxFuture<'static, Result<Lookup, ProtoError>>,
+    query: BoxFuture<'static, Result<Lookup, NetError>>,
 }
 
 impl<C> LookupFuture<C>
@@ -615,7 +616,7 @@ where
                     client_cache.lookup(query, options).boxed()
                 }
             }
-            Err(err) => future::err(err).boxed(),
+            Err(err) => future::err(NetError::from(err)).boxed(),
         };
 
         Self {
@@ -632,7 +633,7 @@ impl<C> Future for LookupFuture<C>
 where
     C: DnsHandle + 'static,
 {
-    type Output = Result<Lookup, ProtoError>;
+    type Output = Result<Lookup, NetError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         loop {
@@ -1186,6 +1187,7 @@ mod tests {
     use super::testing::{sec_lookup_fails_test, sec_lookup_test};
     use super::*;
     use crate::config::{CLOUDFLARE, GOOGLE, ResolverConfig, ResolverOpts};
+    use crate::net::NetErrorKind;
     use crate::net::xfer::DnsExchange;
     use crate::proto::op::{DnsRequest, DnsResponse, Message};
     use crate::proto::rr::rdata::A;
@@ -1482,11 +1484,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_empty_no_response() {
-        if let ProtoErrorKind::Dns(DnsError::NoRecordsFound(NoRecords {
-            query,
-            negative_ttl,
+        if let NetErrorKind::Proto(ProtoError {
+            kind:
+                ProtoErrorKind::Dns(DnsError::NoRecordsFound(NoRecords {
+                    query,
+                    negative_ttl,
+                    ..
+                })),
             ..
-        })) = LookupFuture::lookup(
+        }) = LookupFuture::lookup(
             vec![Name::root()],
             RecordType::A,
             DnsRequestOptions::default(),
@@ -1505,11 +1511,11 @@ mod tests {
 
     #[derive(Clone)]
     struct MockDnsHandle {
-        messages: Arc<Mutex<Vec<Result<DnsResponse, ProtoError>>>>,
+        messages: Arc<Mutex<Vec<Result<DnsResponse, NetError>>>>,
     }
 
     impl DnsHandle for MockDnsHandle {
-        type Response = Pin<Box<dyn Stream<Item = Result<DnsResponse, ProtoError>> + Send>>;
+        type Response = Pin<Box<dyn Stream<Item = Result<DnsResponse, NetError>> + Send>>;
         type Runtime = TokioRuntimeProvider;
 
         fn send(&self, _: DnsRequest) -> Self::Response {
@@ -1519,7 +1525,7 @@ mod tests {
         }
     }
 
-    fn v4_message() -> Result<DnsResponse, ProtoError> {
+    fn v4_message() -> Result<DnsResponse, NetError> {
         let mut message = Message::query();
         message.add_query(Query::query(Name::root(), RecordType::A));
         message.insert_answers(vec![Record::from_rdata(
@@ -1533,17 +1539,17 @@ mod tests {
         Ok(resp)
     }
 
-    fn empty() -> Result<DnsResponse, ProtoError> {
+    fn empty() -> Result<DnsResponse, NetError> {
         Ok(DnsResponse::from_message(Message::query()).unwrap())
     }
 
-    fn error() -> Result<DnsResponse, ProtoError> {
-        Err(ProtoError::from(std::io::Error::from(
+    fn error() -> Result<DnsResponse, NetError> {
+        Err(NetError::from(std::io::Error::from(
             std::io::ErrorKind::Other,
         )))
     }
 
-    fn mock(messages: Vec<Result<DnsResponse, ProtoError>>) -> MockDnsHandle {
+    fn mock(messages: Vec<Result<DnsResponse, NetError>>) -> MockDnsHandle {
         MockDnsHandle {
             messages: Arc::new(Mutex::new(messages)),
         }

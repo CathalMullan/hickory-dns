@@ -14,26 +14,25 @@ use hickory_integration::{
     example_zone::create_example,
 };
 use hickory_net::{
-    DnsHandle, runtime::TokioRuntimeProvider, tcp::TcpClientStream, udp::UdpClientStream,
-    xfer::FirstAnswer,
+    DnsHandle, NetErrorKind, runtime::TokioRuntimeProvider, tcp::TcpClientStream,
+    udp::UdpClientStream, xfer::FirstAnswer,
 };
 #[cfg(all(feature = "__dnssec", feature = "sqlite"))]
 use hickory_net::{
     runtime::TokioTime,
     xfer::{DnsExchangeBackground, DnsMultiplexer},
 };
+#[cfg(all(feature = "__dnssec", feature = "sqlite"))]
 use hickory_proto::{
-    ProtoErrorKind,
+    dnssec::{Algorithm, SigSigner, SigningKey, crypto::RsaSigningKey, rdata::DNSSECRData},
+    rr::{RData, Record, rdata::A},
+};
+use hickory_proto::{
     op::{DnsRequest, Edns, Message, Query, ResponseCode},
     rr::{
         DNSClass, Name, RecordSet, RecordType,
         rdata::opt::{EdnsCode, EdnsOption},
     },
-};
-#[cfg(all(feature = "__dnssec", feature = "sqlite"))]
-use hickory_proto::{
-    dnssec::{Algorithm, SigSigner, SigningKey, crypto::RsaSigningKey, rdata::DNSSECRData},
-    rr::{RData, Record, rdata::A},
 };
 #[cfg(all(feature = "__dnssec", feature = "sqlite"))]
 use hickory_server::zone_handler::AxfrPolicy;
@@ -975,7 +974,7 @@ async fn test_timeout_query(mut client: Client<TokioRuntimeProvider>) {
         .unwrap_err();
 
     println!("got error: {err:?}");
-    if let ProtoErrorKind::Timeout = err.kind() {
+    if let NetErrorKind::Timeout = err.kind() {
     } else {
         panic!("expected timeout error");
     }

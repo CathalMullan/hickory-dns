@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 use futures::TryStreamExt;
 #[cfg(all(feature = "__dnssec", feature = "sqlite"))]
 use futures::future::BoxFuture;
+use hickory_net::NetErrorKind;
 #[cfg(all(feature = "__dnssec", feature = "sqlite"))]
 use time::Duration;
 
@@ -25,7 +26,6 @@ use hickory_net::udp::UdpClientStream;
 #[cfg(all(feature = "__dnssec", feature = "sqlite"))]
 use hickory_net::xfer::DnsMultiplexerConnect;
 use hickory_net::xfer::{DnsHandle, DnsMultiplexer};
-use hickory_proto::ProtoErrorKind;
 #[cfg(all(feature = "__dnssec", feature = "sqlite"))]
 use hickory_proto::dnssec::rdata::{DNSSECRData, KEY};
 #[cfg(all(feature = "__dnssec", feature = "sqlite"))]
@@ -263,7 +263,7 @@ async fn test_timeout_query(mut client: Client<TokioRuntimeProvider>) {
 
     let err = response.unwrap_err();
 
-    if let ProtoErrorKind::Timeout = err.kind() {
+    if let NetErrorKind::Timeout = err.kind() {
     } else {
         panic!("expected timeout error")
     }

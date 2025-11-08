@@ -13,10 +13,10 @@ use std::sync::Arc;
 use futures_util::stream::Stream;
 
 use crate::client::Client;
+use crate::net::NetError;
 use crate::net::dnssec::DnssecDnsHandle;
 use crate::net::runtime::{TokioRuntimeProvider, TokioTime};
 use crate::net::xfer::{DnsExchangeBackground, DnsHandle, DnsRequestSender};
-use crate::proto::ProtoError;
 use crate::proto::dnssec::TrustAnchors;
 use crate::proto::op::{DnsRequest, DnsResponse};
 
@@ -68,7 +68,7 @@ impl Clone for DnssecClient {
 }
 
 impl DnsHandle for DnssecClient {
-    type Response = Pin<Box<dyn Stream<Item = Result<DnsResponse, ProtoError>> + Send + 'static>>;
+    type Response = Pin<Box<dyn Stream<Item = Result<DnsResponse, NetError>> + Send + 'static>>;
     type Runtime = TokioRuntimeProvider;
 
     fn send(&self, request: DnsRequest) -> Self::Response {

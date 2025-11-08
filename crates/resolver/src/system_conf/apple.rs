@@ -1,6 +1,7 @@
 use std::{borrow::Cow, net::IpAddr, str::FromStr};
 
-use hickory_proto::{ProtoError, rr::Name};
+use hickory_net::NetError;
+use hickory_proto::rr::Name;
 use system_configuration::{
     core_foundation::{
         array::CFArray,
@@ -13,7 +14,7 @@ use system_configuration::{
 
 use crate::config::{NameServerConfig, ResolverConfig, ResolverOpts};
 
-pub fn read_system_conf() -> Result<(ResolverConfig, ResolverOpts), ProtoError> {
+pub fn read_system_conf() -> Result<(ResolverConfig, ResolverOpts), NetError> {
     let sc = SCDynamicStoreBuilder::new("hickory-resolver").build();
 
     let dns_cfg = sc

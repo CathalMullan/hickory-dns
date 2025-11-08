@@ -20,10 +20,10 @@ use std::{fmt, io};
 
 use thiserror::Error;
 
+use crate::net::NetError;
 use crate::proto::serialize::txt::ParseError;
 #[cfg(feature = "backtrace")]
 use crate::proto::{ExtBacktrace, trace};
-use crate::proto::{ProtoError, ProtoErrorKind};
 
 /// The error kind for errors that get returned in the crate
 #[derive(Debug, Error)]
@@ -43,9 +43,9 @@ pub enum PersistenceErrorKind {
     },
 
     // foreign
-    /// An error got returned by the hickory-proto crate
-    #[error("proto error: {0}")]
-    Proto(#[from] ProtoError),
+    /// An error got returned by the hickory-net crate
+    #[error("net error: {0}")]
+    Net(#[from] NetError),
 
     /// An error got returned from the sqlite crate
     #[cfg(feature = "sqlite")]
@@ -99,10 +99,10 @@ impl From<PersistenceErrorKind> for PersistenceError {
     }
 }
 
-impl From<ProtoError> for PersistenceError {
-    fn from(e: ProtoError) -> Self {
+impl From<NetError> for PersistenceError {
+    fn from(e: NetError) -> Self {
         match e.kind() {
-            ProtoErrorKind::Timeout => PersistenceErrorKind::Timeout.into(),
+            crate::net::NetErrorKind::Timeout => PersistenceErrorKind::Timeout.into(),
             _ => PersistenceErrorKind::from(e).into(),
         }
     }

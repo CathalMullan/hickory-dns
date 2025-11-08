@@ -16,17 +16,20 @@ use thiserror::Error;
 
 #[cfg(feature = "__dnssec")]
 use crate::dnssec::NxProofKind;
+use crate::net::NetError;
+#[cfg(feature = "recursor")]
+use crate::net::NetErrorKind;
 #[cfg(feature = "__dnssec")]
-use crate::proto::dnssec::crypto::Digest;
-#[cfg(feature = "__dnssec")]
-use crate::proto::dnssec::rdata::KEY;
-#[cfg(feature = "__dnssec")]
-use crate::proto::dnssec::{DnsSecResult, Nsec3HashAlgorithm, SigSigner};
+use crate::proto::dnssec::{
+    DnsSecResult, Nsec3HashAlgorithm, SigSigner, crypto::Digest, rdata::KEY,
+};
 use crate::proto::op::{Edns, ResponseCode, ResponseSigner};
 #[cfg(feature = "__dnssec")]
 use crate::proto::rr::Name;
-use crate::proto::rr::{LowerName, Record, RecordSet, RecordType, RrsetRecords, rdata::SOA};
-use crate::proto::{DnsError, NoRecords, ProtoError, ProtoErrorKind};
+use crate::proto::{
+    DnsError, NoRecords, ProtoErrorKind,
+    rr::{LowerName, Record, RecordSet, RecordType, RrsetRecords, rdata::SOA},
+};
 #[cfg(feature = "recursor")]
 use crate::recursor::ErrorKind;
 use crate::server::{Request, RequestInfo};
@@ -387,9 +390,9 @@ pub enum LookupError {
     /// There was an error performing the lookup
     #[error("Error performing lookup: {0}")]
     ResponseCode(ResponseCode),
-    /// Proto error
-    #[error("Proto error: {0}")]
-    ProtoError(#[from] ProtoError),
+    /// Net error
+    #[error("Net error: {0}")]
+    NetError(#[from] NetError),
     /// Recursive Resolver Error
     #[cfg(feature = "recursor")]
     #[error("Recursive resolution error: {0}")]
@@ -408,7 +411,7 @@ impl LookupError {
     /// This is a non-existent domain name
     pub fn is_nx_domain(&self) -> bool {
         match self {
-            Self::ProtoError(e) => e.is_nx_domain(),
+            Self::NetError(e) => e.is_nx_domain(),
             Self::ResponseCode(ResponseCode::NXDomain) => true,
             #[cfg(feature = "recursor")]
             Self::RecursiveError(e) if e.is_nx_domain() => true,
@@ -419,7 +422,7 @@ impl LookupError {
     /// Returns true if no records were returned
     pub fn is_no_records_found(&self) -> bool {
         match self {
-            Self::ProtoError(e) => e.is_no_records_found(),
+            Self::NetError(e) => e.is_no_records_found(),
             #[cfg(feature = "recursor")]
             Self::RecursiveError(e) if e.is_no_records_found() => true,
             _ => false,
@@ -429,7 +432,7 @@ impl LookupError {
     /// Returns the SOA record, if the error contains one
     pub fn into_soa(self) -> Option<Box<Record<SOA>>> {
         match self {
-            Self::ProtoError(e) => e.into_soa(),
+            Self::NetError(e) => e.into_soa(),
             #[cfg(feature = "recursor")]
             Self::RecursiveError(e) => e.into_soa(),
             _ => None,
@@ -439,20 +442,30 @@ impl LookupError {
     /// Return authority records
     pub fn authorities(&self) -> Option<Arc<[Record]>> {
         match self {
-            Self::ProtoError(e) => match e.kind() {
-                ProtoErrorKind::Dns(DnsError::NoRecordsFound(NoRecords {
-                    authorities, ..
-                })) => authorities.clone(),
-                _ => None,
-            },
+            Self::NetError(e) => {
+                if let Some(e) = e.kind().as_proto() {
+                    match e.kind() {
+                        ProtoErrorKind::Dns(DnsError::NoRecordsFound(NoRecords {
+                            authorities,
+                            ..
+                        })) => authorities.clone(),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
             #[cfg(feature = "recursor")]
             Self::RecursiveError(e) => match e.kind() {
                 ErrorKind::Negative(fwd) => fwd.authorities.clone(),
-                ErrorKind::Proto(proto) => match proto.kind() {
-                    ProtoErrorKind::Dns(DnsError::NoRecordsFound(NoRecords {
-                        authorities,
-                        ..
-                    })) => authorities.clone(),
+                ErrorKind::Net(e) => match e.kind() {
+                    NetErrorKind::Proto(e) => match e.kind() {
+                        ProtoErrorKind::Dns(DnsError::NoRecordsFound(NoRecords {
+                            authorities,
+                            ..
+                        })) => authorities.clone(),
+                        _ => None,
+                    },
                     _ => None,
                 },
                 _ => None,
@@ -502,8 +515,10 @@ pub struct Nsec3QueryInfo<'q> {
 #[cfg(feature = "__dnssec")]
 impl Nsec3QueryInfo<'_> {
     /// Computes the hash of a given name.
-    pub(crate) fn hash_name(&self, name: &Name) -> Result<Digest, ProtoError> {
-        self.algorithm.hash(self.salt, name, self.iterations)
+    pub(crate) fn hash_name(&self, name: &Name) -> Result<Digest, NetError> {
+        self.algorithm
+            .hash(self.salt, name, self.iterations)
+            .map_err(NetError::from)
     }
 
     /// Computes the hashed owner name from a given name. That is, the hash of the given name,
@@ -512,7 +527,7 @@ impl Nsec3QueryInfo<'_> {
         &self,
         name: &LowerName,
         zone: &Name,
-    ) -> Result<LowerName, ProtoError> {
+    ) -> Result<LowerName, NetError> {
         let hash = self.hash_name(name)?;
         let label = data_encoding::BASE32_DNSSEC.encode(hash.as_ref());
         Ok(LowerName::new(&zone.prepend_label(label)?))

@@ -11,6 +11,8 @@
 use std::{collections::HashMap, iter, sync::Arc};
 
 use hickory_net::runtime::Time;
+#[cfg(all(feature = "__dnssec", feature = "recursor"))]
+use hickory_proto::{ProtoError, ProtoErrorKind};
 use tracing::{debug, error, info, trace, warn};
 
 #[cfg(feature = "metrics")]
@@ -19,7 +21,8 @@ use crate::zone_handler::metrics::CatalogMetrics;
 use crate::{dnssec::NxProofKind, proto::dnssec::DnssecSummary, zone_handler::Nsec3QueryInfo};
 #[cfg(all(feature = "__dnssec", feature = "recursor"))]
 use crate::{
-    proto::{DnsError, ProtoError, ProtoErrorKind},
+    net::{NetError, NetErrorKind},
+    proto::DnsError,
     recursor,
     recursor::ErrorKind,
 };
@@ -1080,10 +1083,14 @@ async fn build_forwarded_response(
         #[cfg(all(feature = "__dnssec", feature = "recursor"))]
         Err(LookupError::RecursiveError(recursor::Error {
             kind:
-                ErrorKind::Proto(ProtoError {
+                ErrorKind::Net(NetError {
                     kind:
-                        ProtoErrorKind::Dns(DnsError::Nsec {
-                            response, proof, ..
+                        NetErrorKind::Proto(ProtoError {
+                            kind:
+                                ProtoErrorKind::Dns(DnsError::Nsec {
+                                    response, proof, ..
+                                }),
+                            ..
                         }),
                     ..
                 }),

@@ -14,10 +14,10 @@ use ipconfig::computer::{get_domain, get_search_list};
 use ipconfig::get_adapters;
 
 use crate::config::{NameServerConfig, ResolverConfig, ResolverOpts};
-use crate::proto::ProtoError;
+use crate::net::NetError;
 use crate::proto::rr::Name;
 
-pub fn read_system_conf() -> Result<(ResolverConfig, ResolverOpts), ProtoError> {
+pub fn read_system_conf() -> Result<(ResolverConfig, ResolverOpts), NetError> {
     let adapters = get_adapters().map_err(|e| format!("ipconfig::get_adapters() failed: {e}"))?;
 
     let servers = adapters

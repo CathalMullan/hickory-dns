@@ -14,9 +14,8 @@ use std::net::SocketAddr;
 #[cfg(feature = "testing")]
 use crate::proto::serialize::binary::{BinEncodable, BinEncoder};
 use crate::{
-    net::xfer::Protocol,
+    net::{NetError, xfer::Protocol},
     proto::{
-        ProtoError,
         op::{Header, LowerQuery, MessageType, ResponseCode},
         serialize::binary::{BinDecodable, BinDecoder},
     },
@@ -38,11 +37,7 @@ pub struct Request {
 
 impl Request {
     /// Construct a new Request from the raw bytes, source address, and protocol
-    pub fn from_bytes(
-        raw: Vec<u8>,
-        src: SocketAddr,
-        protocol: Protocol,
-    ) -> Result<Self, ProtoError> {
+    pub fn from_bytes(raw: Vec<u8>, src: SocketAddr, protocol: Protocol) -> Result<Self, NetError> {
         let mut decoder = BinDecoder::new(&raw);
         Ok(Self {
             message: MessageRequest::read(&mut decoder)?,
@@ -58,7 +53,7 @@ impl Request {
         message: MessageRequest,
         src: SocketAddr,
         protocol: Protocol,
-    ) -> Result<Self, ProtoError> {
+    ) -> Result<Self, NetError> {
         let mut encoded = Vec::new();
         let mut encoder = BinEncoder::new(&mut encoded);
         message.emit(&mut encoder)?;
@@ -74,6 +69,7 @@ impl Request {
     /// Return just the header and request information from the Request Message
     ///
     /// Returns an error if there is not exactly one query
+    #[allow(clippy::result_large_err)]
     pub fn request_info(&self) -> Result<RequestInfo<'_>, LookupError> {
         Ok(RequestInfo {
             src: self.src,

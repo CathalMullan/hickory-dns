@@ -7,18 +7,22 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{Error, Recursor, RecursorBuilder};
-use hickory_proto::{
-    ProtoError,
-    op::{Message, Query, ResponseCode},
-    rr::{Name, Record, RecordType},
-};
-use hickory_resolver::{
-    TtlConfig,
-    config::{ProtocolConfig, ResolverOpts},
-};
 use test_support::{MockNetworkHandler, MockProvider, MockRecord, MockResponseSection, subscribe};
 use tokio::time as TokioTime;
+
+use crate::{
+    Error, Recursor, RecursorBuilder,
+    net::NetError,
+    proto::{
+        ProtoError,
+        op::{Message, Query, ResponseCode},
+        rr::{Name, Record, RecordType},
+    },
+    resolver::{
+        TtlConfig,
+        config::{ProtocolConfig, ResolverOpts},
+    },
+};
 
 #[tokio::test]
 async fn recursor_connection_deduplication() -> Result<(), ProtoError> {
@@ -318,6 +322,7 @@ async fn name_server_cache_ttl_glue_off_domain() -> Result<(), ProtoError> {
     Ok(())
 }
 
+#[allow(clippy::result_large_err)]
 fn ns_cache_test_fixture(
     zone_ttl: u32,
     ns_ttl: u32,
@@ -325,15 +330,15 @@ fn ns_cache_test_fixture(
     off_domain: bool,
 ) -> Result<Recursor<MockProvider>, Error> {
     subscribe();
-    let query_1_name = Name::from_ascii("host.hickory-dns.testing.")?;
-    let query_2_name = Name::from_ascii("host2.hickory-dns.testing.")?;
+    let query_1_name = Name::from_ascii("host.hickory-dns.testing.").map_err(NetError::from)?;
+    let query_2_name = Name::from_ascii("host2.hickory-dns.testing.").map_err(NetError::from)?;
 
-    let tld_zone = Name::from_ascii("testing.")?;
-    let tld_ns = Name::from_ascii("testing.testing.")?;
-    let leaf_zone = Name::from_ascii("hickory-dns.testing.")?;
-    let leaf_ns = Name::from_ascii("ns.hickory-dns.testing.")?;
-    let off_domain_zone = Name::from_ascii("otherdomain.testing.")?;
-    let off_domain_ns = Name::from_ascii("ns.otherdomain.testing.")?;
+    let tld_zone = Name::from_ascii("testing.").map_err(NetError::from)?;
+    let tld_ns = Name::from_ascii("testing.testing.").map_err(NetError::from)?;
+    let leaf_zone = Name::from_ascii("hickory-dns.testing.").map_err(NetError::from)?;
+    let leaf_ns = Name::from_ascii("ns.hickory-dns.testing.").map_err(NetError::from)?;
+    let off_domain_zone = Name::from_ascii("otherdomain.testing.").map_err(NetError::from)?;
+    let off_domain_ns = Name::from_ascii("ns.otherdomain.testing.").map_err(NetError::from)?;
     let off_domain_ip = IpAddr::V4(Ipv4Addr::new(10, 0, 5, 1));
     let leaf_2_ip = IpAddr::V4(Ipv4Addr::new(10, 0, 4, 1));
     let target_1_ip_1 = IpAddr::V4(Ipv4Addr::new(10, 1, 0, 1));

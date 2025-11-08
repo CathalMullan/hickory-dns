@@ -18,6 +18,7 @@ use std::{
 use crate::net::rustls::tls_from_stream;
 use bytes::Bytes;
 use futures_util::StreamExt;
+use hickory_proto::ProtoError;
 use ipnet::IpNet;
 #[cfg(feature = "__tls")]
 use rustls::{ServerConfig, server::ResolvesServerCert};
@@ -38,15 +39,13 @@ use crate::net::rustls::default_provider;
 use crate::{
     access::AccessControl,
     net::{
-        BufDnsStreamHandle,
-        runtime::TokioTime,
-        runtime::{TokioRuntimeProvider, iocompat::AsyncIoTokioAsStd},
+        BufDnsStreamHandle, NetError,
+        runtime::{TokioRuntimeProvider, TokioTime, iocompat::AsyncIoTokioAsStd},
         tcp::TcpStream,
         udp::UdpStream,
         xfer::Protocol,
     },
     proto::{
-        ProtoError,
         op::{Header, LowerQuery, MessageType, ResponseCode, SerialMessage},
         rr::Record,
         serialize::binary::{BinDecodable, BinDecoder},
@@ -75,7 +74,7 @@ pub use timeout_stream::TimeoutStream;
 /// A Futures based implementation of a DNS server
 pub struct Server<T: RequestHandler> {
     context: Arc<ServerContext<T>>,
-    join_set: JoinSet<Result<(), ProtoError>>,
+    join_set: JoinSet<Result<(), NetError>>,
 }
 
 impl<T: RequestHandler> Server<T> {
@@ -396,7 +395,7 @@ impl<T: RequestHandler> Server<T> {
 
     /// Triggers a graceful shutdown the server. All background tasks will stop accepting
     /// new connections and the returned future will complete once all tasks have terminated.
-    pub async fn shutdown_gracefully(&mut self) -> Result<(), ProtoError> {
+    pub async fn shutdown_gracefully(&mut self) -> Result<(), NetError> {
         self.context.shutdown.cancel();
 
         // Wait for the server to complete.
@@ -413,7 +412,7 @@ impl<T: RequestHandler> Server<T> {
 
     /// This will run until all background tasks complete. If one or more tasks return an error,
     /// one will be chosen as the returned error for this future.
-    pub async fn block_until_done(&mut self) -> Result<(), ProtoError> {
+    pub async fn block_until_done(&mut self) -> Result<(), NetError> {
         if self.join_set.is_empty() {
             warn!("block_until_done called with no pending tasks");
             return Ok(());
@@ -424,7 +423,7 @@ impl<T: RequestHandler> Server<T> {
             match join_result {
                 Ok(Ok(())) => continue,
                 Ok(Err(e)) => out = Err(e),
-                Err(e) => return Err(ProtoError::from(format!("internal error in spawn: {e}"))),
+                Err(e) => return Err(NetError::from(format!("internal error in spawn: {e}"))),
             }
         }
 
@@ -435,7 +434,7 @@ impl<T: RequestHandler> Server<T> {
 async fn handle_udp(
     socket: net::UdpSocket,
     cx: Arc<ServerContext<impl RequestHandler>>,
-) -> Result<(), ProtoError> {
+) -> Result<(), NetError> {
     debug!("registering udp: {:?}", socket);
 
     // create the new UdpStream, the IP address isn't relevant, and ideally goes essentially no where.
@@ -491,7 +490,7 @@ async fn handle_udp(
         Ok(())
     } else {
         // TODO: let's consider capturing all the initial configuration details so that the socket could be recreated...
-        Err(ProtoError::from("unexpected close of UDP socket"))
+        Err(NetError::from("unexpected close of UDP socket"))
     }
 }
 
@@ -499,7 +498,7 @@ async fn handle_tcp(
     listener: net::TcpListener,
     timeout: Duration,
     cx: Arc<ServerContext<impl RequestHandler>>,
-) -> Result<(), ProtoError> {
+) -> Result<(), NetError> {
     debug!("register tcp: {listener:?}");
     let mut inner_join_set = JoinSet::new();
     loop {
@@ -560,7 +559,7 @@ async fn handle_tcp(
     if cx.shutdown.is_cancelled() {
         Ok(())
     } else {
-        Err(ProtoError::from("unexpected close of socket"))
+        Err(NetError::from("unexpected close of socket"))
     }
 }
 
@@ -570,7 +569,7 @@ async fn handle_tls(
     tls_config: Arc<ServerConfig>,
     handshake_timeout: Duration,
     cx: Arc<ServerContext<impl RequestHandler>>,
-) -> Result<(), ProtoError> {
+) -> Result<(), NetError> {
     debug!(?listener, "registered tls");
     let tls_acceptor = TlsAcceptor::from(tls_config);
 
@@ -650,7 +649,7 @@ async fn handle_tls(
     if cx.shutdown.is_cancelled() {
         Ok(())
     } else {
-        Err(ProtoError::from("unexpected close of socket"))
+        Err(NetError::from("unexpected close of socket"))
     }
 }
 

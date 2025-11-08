@@ -21,6 +21,7 @@ use futures_util::{
 use tracing::debug;
 
 use crate::net::{
+    NetError, NetErrorKind,
     runtime::RuntimeProvider,
     xfer::{
         BufDnsStreamHandle, DnsClientStream, DnsExchange, DnsExchangeBackground, DnsExchangeSend,
@@ -28,7 +29,6 @@ use crate::net::{
     },
 };
 use crate::proto::{
-    ProtoError, ProtoErrorKind,
     op::{
         DnsRequest, DnsRequestOptions, DnsResponse, Edns, Message, MessageSigner, OpCode, Query,
         update_message,
@@ -575,13 +575,13 @@ pub trait ClientHandle: 'static + Clone + DnsHandle + Send {
 #[must_use = "stream do nothing unless polled"]
 pub struct ClientStreamingResponse<R>(pub(crate) R)
 where
-    R: Stream<Item = Result<DnsResponse, ProtoError>> + Send + Unpin + 'static;
+    R: Stream<Item = Result<DnsResponse, NetError>> + Send + Unpin + 'static;
 
 impl<R> Stream for ClientStreamingResponse<R>
 where
-    R: Stream<Item = Result<DnsResponse, ProtoError>> + Send + Unpin + 'static,
+    R: Stream<Item = Result<DnsResponse, NetError>> + Send + Unpin + 'static,
 {
-    type Item = Result<DnsResponse, ProtoError>;
+    type Item = Result<DnsResponse, NetError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         Poll::Ready(ready!(self.0.poll_next_unpin(cx)))
@@ -592,18 +592,18 @@ where
 #[must_use = "futures do nothing unless polled"]
 pub struct ClientResponse<R>(pub(crate) R)
 where
-    R: Stream<Item = Result<DnsResponse, ProtoError>> + Send + Unpin + 'static;
+    R: Stream<Item = Result<DnsResponse, NetError>> + Send + Unpin + 'static;
 
 impl<R> Future for ClientResponse<R>
 where
-    R: Stream<Item = Result<DnsResponse, ProtoError>> + Send + Unpin + 'static,
+    R: Stream<Item = Result<DnsResponse, NetError>> + Send + Unpin + 'static,
 {
-    type Output = Result<DnsResponse, ProtoError>;
+    type Output = Result<DnsResponse, NetError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         Poll::Ready(match ready!(self.0.poll_next_unpin(cx)) {
             Some(r) => r,
-            None => Err(ProtoError::from(ProtoErrorKind::Timeout)),
+            None => Err(NetError::from(NetErrorKind::Timeout)),
         })
     }
 }
@@ -614,14 +614,14 @@ where
 #[must_use = "stream do nothing unless polled"]
 pub struct ClientStreamXfr<R>
 where
-    R: Stream<Item = Result<DnsResponse, ProtoError>> + Send + Unpin + 'static,
+    R: Stream<Item = Result<DnsResponse, NetError>> + Send + Unpin + 'static,
 {
     state: ClientStreamXfrState<R>,
 }
 
 impl<R> ClientStreamXfr<R>
 where
-    R: Stream<Item = Result<DnsResponse, ProtoError>> + Send + Unpin + 'static,
+    R: Stream<Item = Result<DnsResponse, NetError>> + Send + Unpin + 'static,
 {
     fn new(inner: R, maybe_incr: bool) -> Self {
         Self {
@@ -670,7 +670,7 @@ impl<R> ClientStreamXfrState<R> {
 
     /// Helper to ingest answer Records
     // TODO: this is complex enough it should get its own tests
-    fn process(&mut self, answers: &[Record]) -> Result<(), ProtoError> {
+    fn process(&mut self, answers: &[Record]) -> Result<(), NetError> {
         use ClientStreamXfrState::*;
         fn get_serial(r: &Record) -> Option<u32> {
             r.data().as_soa().map(SOA::serial)
@@ -707,7 +707,7 @@ impl<R> ClientStreamXfrState<R> {
                             Ok(())
                         } else {
                             // invalid answer : trailing records
-                            Err(ProtoErrorKind::Message(
+                            Err(NetErrorKind::Message(
                                 "invalid zone transfer, contains trailing records",
                             )
                             .into())
@@ -721,10 +721,10 @@ impl<R> ClientStreamXfrState<R> {
                         self.process(&answers[1..])
                     } else {
                         *self = Ended;
-                        Err(ProtoErrorKind::Message(
-                            "invalid zone transfer, expected AXFR, got IXFR",
+                        Err(
+                            NetErrorKind::Message("invalid zone transfer, expected AXFR, got IXFR")
+                                .into(),
                         )
-                        .into())
                     }
                 } else {
                     // standard AXFR
@@ -755,7 +755,7 @@ impl<R> ClientStreamXfrState<R> {
                         *self = Ended;
                         match answers.last().map(|r| r.record_type()) {
                             Some(RecordType::SOA) => Ok(()),
-                            _ => Err(ProtoErrorKind::Message(
+                            _ => Err(NetErrorKind::Message(
                                 "invalid zone transfer, contains trailing records",
                             )
                             .into()),
@@ -763,7 +763,7 @@ impl<R> ClientStreamXfrState<R> {
                     }
                     _ => {
                         *self = Ended;
-                        Err(ProtoErrorKind::Message(
+                        Err(NetErrorKind::Message(
                             "invalid zone transfer, contains trailing records",
                         )
                         .into())
@@ -802,9 +802,9 @@ impl<R> ClientStreamXfrState<R> {
 
 impl<R> Stream for ClientStreamXfr<R>
 where
-    R: Stream<Item = Result<DnsResponse, ProtoError>> + Send + Unpin + 'static,
+    R: Stream<Item = Result<DnsResponse, NetError>> + Send + Unpin + 'static,
 {
-    type Item = Result<DnsResponse, ProtoError>;
+    type Item = Result<DnsResponse, NetError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         use ClientStreamXfrState::*;
@@ -857,7 +857,7 @@ mod tests {
 
     fn get_stream_testcase(
         records: Vec<Vec<Record>>,
-    ) -> impl Stream<Item = Result<DnsResponse, ProtoError>> + Send + Unpin + 'static {
+    ) -> impl Stream<Item = Result<DnsResponse, NetError>> + Send + Unpin + 'static {
         let stream = records.into_iter().map(|r| {
             Ok({
                 let mut m = Message::query();

@@ -35,6 +35,7 @@ use rustls::{
 };
 
 use hickory_client::client::{Client, ClientHandle};
+use hickory_net::NetError;
 #[cfg(any(feature = "__tls", feature = "__https"))]
 use hickory_net::rustls::client_config;
 #[cfg(feature = "__tls")]
@@ -44,16 +45,15 @@ use hickory_net::{
     tcp::TcpClientStream,
     udp::UdpClientStream,
 };
-use hickory_proto::{
-    ProtoError,
-    op::DnsResponse,
-    rr::{DNSClass, Name, RData, RecordSet, RecordType},
-    serialize::txt::RDataParser,
-};
 #[cfg(feature = "__dnssec")]
 use hickory_proto::{
     dnssec::{Algorithm, PublicKey, TrustAnchors, Verifier, rdata::DNSKEY},
     rr::Record,
+};
+use hickory_proto::{
+    op::DnsResponse,
+    rr::{DNSClass, Name, RData, RecordSet, RecordType},
+    serialize::txt::RDataParser,
 };
 
 /// A CLI interface for the hickory-client.
@@ -148,7 +148,7 @@ impl QueryOpt {
         self,
         class: DNSClass,
         mut client: impl ClientHandle,
-    ) -> Result<DnsResponse, ProtoError> {
+    ) -> Result<DnsResponse, NetError> {
         let Self { name, ty } = self;
         println!("; sending query: {name} {class} {ty}");
         client.query(name, class, ty).await
@@ -175,7 +175,7 @@ impl NotifyOpt {
         self,
         class: DNSClass,
         mut client: impl ClientHandle,
-    ) -> Result<DnsResponse, ProtoError> {
+    ) -> Result<DnsResponse, NetError> {
         let Self { name, ty, rdata } = self;
         let rdata = if rdata.is_empty() {
             None
@@ -216,7 +216,7 @@ impl CreateOpt {
         self,
         class: DNSClass,
         mut client: impl ClientHandle,
-    ) -> Result<DnsResponse, ProtoError> {
+    ) -> Result<DnsResponse, NetError> {
         let Self {
             name,
             ty,
@@ -262,7 +262,7 @@ impl AppendOpt {
         self,
         class: DNSClass,
         mut client: impl ClientHandle,
-    ) -> Result<DnsResponse, ProtoError> {
+    ) -> Result<DnsResponse, NetError> {
         let Self {
             must_exist,
             name,
@@ -302,7 +302,7 @@ impl DeleteRecordOpt {
         self,
         class: DNSClass,
         mut client: impl ClientHandle,
-    ) -> Result<DnsResponse, ProtoError> {
+    ) -> Result<DnsResponse, NetError> {
         let Self {
             name,
             ty,

@@ -7,10 +7,10 @@
 
 //! HTTP request creation and validation
 
-use hickory_proto::ProtoError;
 use http::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use http::{Response, StatusCode};
 
+use crate::NetError;
 use crate::http::Version;
 use crate::http::error::Result;
 
@@ -41,6 +41,7 @@ use crate::http::error::Result;
 /// client (HTTP status code 406; see Section 6.5.6 of [RFC7231]), and so
 /// on.
 /// ```
+#[allow(clippy::result_large_err)]
 pub fn new(version: Version, message_len: usize) -> Result<Response<()>> {
     Response::builder()
         .status(StatusCode::OK)
@@ -48,5 +49,5 @@ pub fn new(version: Version, message_len: usize) -> Result<Response<()>> {
         .header(CONTENT_TYPE, crate::http::MIME_APPLICATION_DNS)
         .header(CONTENT_LENGTH, message_len)
         .body(())
-        .map_err(|e| ProtoError::from(format!("invalid response: {e}")).into())
+        .map_err(|e| NetError::from(format!("invalid response: {e}")).into())
 }

@@ -7,13 +7,15 @@ use std::{
     time::{Duration, Instant},
 };
 
+use hickory_net::{NetError, NetErrorKind};
+use hickory_proto::ProtoErrorKind;
 use moka::{Expiry, sync::Cache};
 #[cfg(feature = "serde")]
 use serde::Deserialize;
 
 use crate::config;
 use crate::proto::{
-    DnsError, NoRecords, ProtoError, ProtoErrorKind,
+    DnsError, NoRecords,
     op::{Message, Query},
     rr::RecordType,
 };
@@ -43,7 +45,7 @@ impl ResponseCache {
     }
 
     /// Insert a response into the cache.
-    pub fn insert(&self, query: Query, result: Result<Message, ProtoError>, now: Instant) {
+    pub fn insert(&self, query: Query, result: Result<Message, NetError>, now: Instant) {
         let ttl = match &result {
             Ok(message) => {
                 let (positive_min_ttl, positive_max_ttl) = self
@@ -58,9 +60,14 @@ impl ResponseCache {
                     .clamp(positive_min_ttl, positive_max_ttl)
             }
             Err(e) => {
-                let ProtoErrorKind::Dns(DnsError::NoRecordsFound(no_records)) = e.kind() else {
+                let NetErrorKind::Proto(e) = e.kind() else {
                     return;
                 };
+
+                let ProtoErrorKind::Dns(DnsError::NoRecordsFound(no_records)) = &e.kind else {
+                    return;
+                };
+
                 let (negative_min_ttl, negative_max_ttl) = self
                     .ttl_config
                     .negative_response_ttl_bounds(query.query_type())
@@ -84,7 +91,7 @@ impl ResponseCache {
     }
 
     /// Try to retrieve a cached response with the given query.
-    pub fn get(&self, query: &Query, now: Instant) -> Option<Result<Message, ProtoError>> {
+    pub fn get(&self, query: &Query, now: Instant) -> Option<Result<Message, NetError>> {
         let entry = self.cache.get(query)?;
         if !entry.is_current(now) {
             return None;
@@ -103,7 +110,7 @@ impl ResponseCache {
 /// it expires.
 #[derive(Debug, Clone)]
 struct Entry {
-    result: Arc<Result<Message, ProtoError>>,
+    result: Arc<Result<Message, NetError>>,
     original_time: Instant,
     valid_until: Instant,
 }
@@ -111,7 +118,7 @@ struct Entry {
 impl Entry {
     /// Return the `Result` stored in this entry, with modified TTLs, subtracting the elapsed time
     /// since the response was received.
-    fn updated_ttl(&self, now: Instant) -> Result<Message, ProtoError> {
+    fn updated_ttl(&self, now: Instant) -> Result<Message, NetError> {
         let elapsed = u32::try_from(now.saturating_duration_since(self.original_time).as_secs())
             .unwrap_or(u32::MAX);
         match &*self.result {
@@ -130,12 +137,14 @@ impl Entry {
             }
             Err(e) => {
                 let mut e = e.clone();
-                if let ProtoErrorKind::Dns(DnsError::NoRecordsFound(NoRecords {
-                    negative_ttl: Some(ttl),
-                    ..
-                })) = &mut e.kind
-                {
-                    *ttl = ttl.saturating_sub(elapsed);
+                if let NetErrorKind::Proto(proto_err) = &mut e.kind {
+                    if let ProtoErrorKind::Dns(DnsError::NoRecordsFound(NoRecords {
+                        negative_ttl: Some(ttl),
+                        ..
+                    })) = &mut proto_err.kind
+                    {
+                        *ttl = ttl.saturating_sub(elapsed);
+                    }
                 }
                 Err(e)
             }
@@ -359,12 +368,13 @@ mod tests {
         time::{Duration, Instant},
     };
 
+    use hickory_proto::ProtoError;
     #[cfg(feature = "serde")]
     use serde::Deserialize;
 
     use super::*;
     use crate::proto::{
-        NoRecords, ProtoErrorKind,
+        NoRecords,
         op::{Message, OpCode, Query, ResponseCode},
         rr::{
             Name, RData, Record, RecordType,
@@ -380,7 +390,7 @@ mod tests {
         let past_the_future = now + Duration::from_secs(6);
 
         let entry = Entry {
-            result: Err(ProtoErrorKind::Message("test error").into()).into(),
+            result: Err(NetErrorKind::Message("test error").into()).into(),
             original_time: now,
             valid_until: future,
         };
@@ -450,7 +460,11 @@ mod tests {
         // Negative response should have TTL of 1 second.
         let mut no_records = NoRecords::new(query.clone(), ResponseCode::NoError);
         no_records.negative_ttl = Some(1);
-        cache.insert(query.clone(), Err(no_records.into()), now);
+        cache.insert(
+            query.clone(),
+            Err(NetError::from(ProtoError::from(no_records))),
+            now,
+        );
         let valid_until = cache.cache.get(&query).unwrap().valid_until;
         // The error's `valid_until` field should have been limited to 2 seconds.
         assert_eq!(valid_until, now + Duration::from_secs(2));
@@ -458,7 +472,11 @@ mod tests {
         // Negative response should have TTL of 3 seconds.
         let mut no_records = NoRecords::new(query.clone(), ResponseCode::NoError);
         no_records.negative_ttl = Some(3);
-        cache.insert(query.clone(), Err(no_records.into()), now);
+        cache.insert(
+            query.clone(),
+            Err(NetError::from(ProtoError::from(no_records))),
+            now,
+        );
         let valid_until = cache.cache.get(&query).unwrap().valid_until;
         // The error's `valid_until` field should not have been limited, as it was over the minimum
         // TTL.
@@ -524,7 +542,11 @@ mod tests {
         // Negative response should have TTL of 62 seconds.
         let mut no_records = NoRecords::new(query.clone(), ResponseCode::NoError);
         no_records.negative_ttl = Some(62);
-        cache.insert(query.clone(), Err(no_records.into()), now);
+        cache.insert(
+            query.clone(),
+            Err(NetError::from(ProtoError::from(no_records))),
+            now,
+        );
         let valid_until = cache.cache.get(&query).unwrap().valid_until;
         // The error's `valid_until` field should have been limited to 60 seconds.
         assert_eq!(valid_until, now + Duration::from_secs(60));
@@ -532,7 +554,11 @@ mod tests {
         // Negative response should have TTL of 59 seconds.
         let mut no_records = NoRecords::new(query.clone(), ResponseCode::NoError);
         no_records.negative_ttl = Some(59);
-        cache.insert(query.clone(), Err(no_records.into()), now);
+        cache.insert(
+            query.clone(),
+            Err(NetError::from(ProtoError::from(no_records))),
+            now,
+        );
         let valid_until = cache.cache.get(&query).unwrap().valid_until;
         // The error's `valid_until` field should not have been limited, as it was under the maximum
         // TTL.

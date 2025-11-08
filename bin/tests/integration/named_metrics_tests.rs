@@ -20,6 +20,8 @@ use hickory_net::dnssec::DnssecDnsHandle;
 use hickory_net::runtime::TokioRuntimeProvider;
 use hickory_net::tcp::TcpClientStream;
 use hickory_net::xfer::Protocol;
+#[cfg(feature = "blocklist")]
+use hickory_net::{NetError, NetErrorKind};
 #[cfg(all(feature = "__dnssec", feature = "sqlite"))]
 use hickory_proto::dnssec::{
     Algorithm, SigSigner, SigningKey, TrustAnchors, crypto::RsaSigningKey, rdata::DNSKEY,
@@ -32,8 +34,6 @@ use hickory_proto::rr::RData::PTR;
 use hickory_proto::rr::Record;
 use hickory_proto::rr::rdata::A;
 use hickory_proto::rr::{DNSClass, Name, RData, RecordType};
-#[cfg(feature = "blocklist")]
-use hickory_proto::{ProtoError, ProtoErrorKind};
 use prometheus_parse::{Scrape, Value};
 #[cfg(all(feature = "__dnssec", feature = "sqlite"))]
 use rustls_pki_types::PrivatePkcs8KeyDer;
@@ -724,13 +724,13 @@ async fn retry_client_lookup(
     name: Name,
     class: DNSClass,
     rtype: RecordType,
-) -> Result<DnsResponse, ProtoError> {
+) -> Result<DnsResponse, NetError> {
     let mut i = 0;
     loop {
         return match client.query(name.clone(), class, rtype).await {
             Ok(res) => Ok(res),
-            Err(ProtoError {
-                kind: ProtoErrorKind::Timeout,
+            Err(NetError {
+                kind: NetErrorKind::Timeout,
                 ..
             }) if i < LOOKUP_RETRIES => {
                 i += 1;

@@ -66,7 +66,7 @@ mdns = ["socket2/all", "hickory-proto/mdns"]
 # enables a custom random function backed by a no_std compatible mutex
 no-std-rand = ["hickory-proto/no-std-rand"]
 
-wasm-bindgen = ["hickory-proto/wasm-bindgen"]
+wasm-bindgen = ["dep:wasm-bindgen-crate", "dep:js-sys"]
 
 backtrace = ["hickory-proto/backtrace"]
 
@@ -82,6 +82,7 @@ hickory-proto.workspace = true
 async-trait.workspace = true
 bytes = { workspace = true, optional = true }
 cfg-if.workspace = true
+enum-as-inner.workspace = true
 futures-channel = { workspace = true, default-features = false, features = ["alloc"] }
 futures-io = { workspace = true, default-features = false, optional = true }
 futures-util = { workspace = true, default-features = false, features = ["alloc", "async-await-macro"] }
@@ -89,6 +90,7 @@ h2 = { workspace = true, features = ["stream"], optional = true }
 h3 = { workspace = true, optional = true }
 h3-quinn = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
 once_cell = { workspace = true }
 quinn = { workspace = true, optional = true, features = ["log", "runtime-tokio"] }
 rand = { workspace = true, features = ["std_rng"] }
@@ -100,7 +102,11 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["io-util", "macros"], optional = true }
 tokio-rustls = { workspace = true, optional = true, features = ["early-data"] }
 tracing = { workspace = true, default-features = false }
+wasm-bindgen-crate = { workspace = true, optional = true }
 webpki-roots = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = { workspace = true }
 
 [dev-dependencies]
 futures-executor = { workspace = true, default-features = false, features = ["std"] }

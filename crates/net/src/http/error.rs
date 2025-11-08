@@ -9,16 +9,18 @@ use alloc::{fmt, string::String};
 use core::num::ParseIntError;
 use std::io;
 
-use hickory_proto::ProtoError;
 #[cfg(feature = "backtrace")]
 use hickory_proto::{ExtBacktrace, trace};
 use http::header::ToStrError;
 use thiserror::Error;
 
+use crate::NetError;
+
 /// An alias for results returned by functions of this crate
 pub type Result<T> = ::core::result::Result<T, Error>;
 
-// TODO: remove this and put in ProtoError
+// FIXME(NET): Do as the TODO says first?
+// TODO: remove this and put in NetError
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum ErrorKind {
@@ -38,8 +40,8 @@ pub enum ErrorKind {
     #[error("unable to parse number: {0}")]
     ParseInt(#[from] ParseIntError),
 
-    #[error("proto error: {0}")]
-    ProtoError(#[from] ProtoError),
+    #[error("net error: {0}")]
+    NetError(#[from] NetError),
 
     #[error("h2: {0}")]
     #[cfg(feature = "__https")]
@@ -116,9 +118,9 @@ impl From<ToStrError> for Error {
     }
 }
 
-impl From<ProtoError> for Error {
-    fn from(msg: ProtoError) -> Self {
-        ErrorKind::ProtoError(msg).into()
+impl From<NetError> for Error {
+    fn from(msg: NetError) -> Self {
+        ErrorKind::NetError(msg).into()
     }
 }
 

@@ -13,7 +13,6 @@ use core::marker::PhantomData;
 use core::mem;
 use core::pin::Pin;
 use core::task::{Context, Poll};
-use hickory_proto::ProtoError;
 use std::io;
 
 use futures_channel::mpsc;
@@ -24,7 +23,6 @@ use futures_util::{
 use hickory_proto::op::{DnsRequest, DnsResponse};
 use tracing::debug;
 
-use crate::DnsMultiplexer;
 #[cfg(all(feature = "__https", feature = "tokio"))]
 use crate::h2::{HttpsClientConnect, HttpsClientStream};
 #[cfg(all(feature = "__h3", feature = "tokio"))]
@@ -44,6 +42,7 @@ use crate::xfer::{
     BufDnsRequestStreamHandle, CHANNEL_BUFFER_SIZE, DnsRequestSender, OneshotDnsRequest,
 };
 use crate::xfer::{DnsMultiplexerConnect, DnsResponseReceiver};
+use crate::{DnsMultiplexer, NetError};
 
 /// The variants of all supported connections for a `DnsExchange`.
 #[allow(missing_docs, clippy::large_enum_variant, clippy::type_complexity)]
@@ -183,7 +182,7 @@ pub struct DnsExchangeSend<P> {
 }
 
 impl<P: Unpin> Stream for DnsExchangeSend<P> {
-    type Item = Result<DnsResponse, ProtoError>;
+    type Item = Result<DnsResponse, NetError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // as long as there is no result, poll the exchange
@@ -218,7 +217,7 @@ where
     S: DnsRequestSender + 'static + Send + Unpin,
     TE: Time + Unpin,
 {
-    type Output = Result<(), ProtoError>;
+    type Output = Result<(), NetError>;
 
     #[allow(clippy::unused_unit)]
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -425,8 +424,7 @@ where
                         Poll::Pending => return Poll::Pending,
                     } {
                         // ignoring errors... best effort send...
-                        let error =
-                            ProtoError::from(io::Error::new(error.kind(), error.to_string()));
+                        let error = NetError::from(io::Error::new(error.kind(), error.to_string()));
                         let _ = outbound_message
                             .into_parts()
                             .1

@@ -19,7 +19,6 @@ use futures_util::{
     future::{BoxFuture, FutureExt},
     stream::Stream,
 };
-use hickory_proto::ProtoError;
 use hickory_proto::op::{DnsRequest, DnsResponse};
 use quinn::{
     ClientConfig, Connection, Endpoint, TransportConfig, VarInt, crypto::rustls::QuicClientConfig,
@@ -27,6 +26,7 @@ use quinn::{
 use tokio::time::timeout;
 
 use crate::{
+    NetError,
     quic::quic_stream::{DoqErrorCode, QuicStream},
     rustls::client_config,
     udp::UdpSocket,
@@ -60,7 +60,7 @@ impl QuicClientStream {
     async fn inner_send(
         connection: Connection,
         message: DnsRequest,
-    ) -> Result<DnsResponse, ProtoError> {
+    ) -> Result<DnsResponse, NetError> {
         let (send_stream, recv_stream) = connection.open_bi().await?;
 
         // RFC: The mapping specified here requires that the client selects a separate
@@ -184,7 +184,7 @@ impl DnsRequestSender for QuicClientStream {
 }
 
 impl Stream for QuicClientStream {
-    type Item = Result<(), ProtoError>;
+    type Item = Result<(), NetError>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if self.is_shutdown {
@@ -314,7 +314,7 @@ pub(crate) async fn connect_quic(
     mut crypto_config: rustls::ClientConfig,
     transport_config: Arc<TransportConfig>,
     mut endpoint: Endpoint,
-) -> Result<Connection, ProtoError> {
+) -> Result<Connection, NetError> {
     if crypto_config.alpn_protocols.is_empty() {
         crypto_config.alpn_protocols = vec![protocol.to_vec()];
     }
@@ -375,12 +375,12 @@ impl Future for QuicClientConnect {
 }
 
 /// A future that resolves to
-pub struct QuicClientResponse(BoxFuture<'static, Result<DnsResponse, ProtoError>>);
+pub struct QuicClientResponse(BoxFuture<'static, Result<DnsResponse, NetError>>);
 
 impl Future for QuicClientResponse {
-    type Output = Result<DnsResponse, ProtoError>;
+    type Output = Result<DnsResponse, NetError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.0.as_mut().poll(cx).map_err(ProtoError::from)
+        self.0.as_mut().poll(cx).map_err(NetError::from)
     }
 }

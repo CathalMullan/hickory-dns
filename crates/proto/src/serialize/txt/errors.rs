@@ -4,7 +4,7 @@ use std::io;
 #[cfg(feature = "backtrace")]
 use crate::trace;
 use crate::{
-    error::{ProtoError, ProtoErrorKind},
+    error::ProtoError,
     rr::RecordType,
     serialize::{binary::DecodeError, txt::Token},
 };
@@ -211,10 +211,7 @@ impl From<core::num::ParseIntError> for ParseError {
 
 impl From<ProtoError> for ParseError {
     fn from(e: ProtoError) -> Self {
-        match e.kind() {
-            ProtoErrorKind::Timeout => ParseErrorKind::Timeout.into(),
-            _ => ParseErrorKind::from(e).into(),
-        }
+        ParseErrorKind::from(e).into()
     }
 }
 

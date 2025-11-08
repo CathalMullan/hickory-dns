@@ -75,6 +75,9 @@ pub mod tcp;
 pub mod udp;
 pub mod xfer;
 
+mod error;
+pub use error::{NetError, NetErrorKind, NetResult};
+
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use crate::xfer::BufDnsStreamHandle;

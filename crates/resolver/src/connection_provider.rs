@@ -18,6 +18,7 @@ use std::task::{Context, Poll};
 
 use futures_util::future::FutureExt;
 use futures_util::ready;
+use hickory_net::NetError;
 #[cfg(feature = "__tls")]
 use rustls::DigitallySignedStruct;
 #[cfg(feature = "__tls")]
@@ -47,7 +48,6 @@ use crate::net::{
     udp::UdpClientStream,
     xfer::{Connecting, DnsExchange, DnsHandle, DnsMultiplexer},
 };
-use crate::proto::ProtoError;
 
 /// Create `DnsHandle` with the help of `RuntimeProvider`.
 /// This trait is designed for customization.
@@ -55,7 +55,7 @@ pub trait ConnectionProvider: 'static + Clone + Send + Sync + Unpin {
     /// The handle to the connection for sending DNS requests.
     type Conn: DnsHandle + Clone + Send + Sync + 'static;
     /// This future is responsible for spawning any background tasks as necessary.
-    type FutureConn: Future<Output = Result<Self::Conn, ProtoError>> + Send + 'static;
+    type FutureConn: Future<Output = Result<Self::Conn, NetError>> + Send + 'static;
     /// Provider that handles the underlying I/O and timing.
     type RuntimeProvider: RuntimeProvider;
 
@@ -79,7 +79,7 @@ pub struct ConnectionFuture<P: RuntimeProvider> {
 }
 
 impl<P: RuntimeProvider> Future for ConnectionFuture<P> {
-    type Output = Result<DnsExchange<P>, ProtoError>;
+    type Output = Result<DnsExchange<P>, NetError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         Poll::Ready(Ok(match &mut self.connect {
@@ -277,7 +277,7 @@ pub struct TlsConfig {
 
 impl TlsConfig {
     /// Create a new `TlsConfig` with default settings.
-    pub fn new() -> Result<Self, ProtoError> {
+    pub fn new() -> Result<Self, NetError> {
         Ok(Self {
             #[cfg(feature = "__tls")]
             config: client_config()?,

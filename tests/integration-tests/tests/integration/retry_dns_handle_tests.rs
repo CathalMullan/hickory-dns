@@ -5,9 +5,11 @@ use std::sync::{
 
 use futures::{Stream, executor::block_on, future, stream};
 
-use hickory_net::{DnsHandle, RetryDnsHandle, runtime::TokioRuntimeProvider, xfer::FirstAnswer};
+use hickory_net::{
+    DnsHandle, NetError, RetryDnsHandle, runtime::TokioRuntimeProvider, xfer::FirstAnswer,
+};
 use hickory_proto::{
-    DnsError, ProtoError,
+    DnsError,
     op::{DnsRequest, DnsResponse, Message, OpCode, ResponseCode},
 };
 use test_support::subscribe;
@@ -15,12 +17,12 @@ use test_support::subscribe;
 #[derive(Clone)]
 struct TestClient {
     retries: u16,
-    error_response: ProtoError,
+    error_response: NetError,
     attempts: Arc<AtomicU16>,
 }
 
 impl DnsHandle for TestClient {
-    type Response = Box<dyn Stream<Item = Result<DnsResponse, ProtoError>> + Send + Unpin>;
+    type Response = Box<dyn Stream<Item = Result<DnsResponse, NetError>> + Send + Unpin>;
     type Runtime = TokioRuntimeProvider;
 
     fn send(&self, _: DnsRequest) -> Self::Response {
@@ -44,7 +46,7 @@ fn retry_on_retryable_error() {
     let handle = RetryDnsHandle::new(
         TestClient {
             retries: 1,
-            error_response: ProtoError::from(std::io::Error::from(std::io::ErrorKind::TimedOut)),
+            error_response: NetError::from(std::io::Error::from(std::io::ErrorKind::TimedOut)),
             attempts: Arc::new(AtomicU16::new(0)),
         },
         2,

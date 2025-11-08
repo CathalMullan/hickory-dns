@@ -14,11 +14,9 @@ use futures_util::stream::Stream;
 
 use crate::client::ClientHandle;
 use crate::client::rc_stream::{RcStream, rc_stream};
+use crate::net::NetError;
 use crate::net::xfer::DnsHandle;
-use crate::proto::{
-    ProtoError,
-    op::{DnsRequest, DnsResponse, Query},
-};
+use crate::proto::op::{DnsRequest, DnsResponse, Query};
 
 // TODO: move to proto
 /// A ClientHandle for memoized (cached) responses to queries.
@@ -49,7 +47,7 @@ where
         request: DnsRequest,
         active_queries: Arc<Mutex<HashMap<Query, RcStream<<H as DnsHandle>::Response>>>>,
         client: H,
-    ) -> impl Stream<Item = Result<DnsResponse, ProtoError>> {
+    ) -> impl Stream<Item = Result<DnsResponse, NetError>> {
         // TODO: what if we want to support multiple queries (non-standard)?
         let query = request.queries().first().expect("no query!").clone();
 
@@ -71,7 +69,7 @@ where
 }
 
 impl<H: ClientHandle> DnsHandle for MemoizeClientHandle<H> {
-    type Response = Pin<Box<dyn Stream<Item = Result<DnsResponse, ProtoError>> + Send>>;
+    type Response = Pin<Box<dyn Stream<Item = Result<DnsResponse, NetError>> + Send>>;
     type Runtime = H::Runtime;
 
     fn send(&self, request: DnsRequest) -> Self::Response {
@@ -97,12 +95,11 @@ mod test {
     use futures::stream;
 
     use super::*;
-    use hickory_net::{
+    use crate::net::{
         runtime::TokioRuntimeProvider,
         xfer::{DnsHandle, FirstAnswer},
     };
-    use hickory_proto::{
-        ProtoError,
+    use crate::proto::{
         op::{DnsRequest, DnsResponse, Message, MessageType, OpCode, Query},
         rr::RecordType,
     };
@@ -114,7 +111,7 @@ mod test {
     }
 
     impl DnsHandle for TestClient {
-        type Response = Pin<Box<dyn Stream<Item = Result<DnsResponse, ProtoError>> + Send>>;
+        type Response = Pin<Box<dyn Stream<Item = Result<DnsResponse, NetError>> + Send>>;
         type Runtime = TokioRuntimeProvider;
 
         fn send(&self, request: DnsRequest) -> Self::Response {

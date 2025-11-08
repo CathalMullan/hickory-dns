@@ -14,11 +14,9 @@ use core::time::Duration;
 use std::io;
 
 use futures_util::{StreamExt, future::BoxFuture, stream::Stream};
-use hickory_proto::ProtoError;
 use hickory_proto::op::SerialMessage;
 use tracing::warn;
 
-use crate::BufDnsStreamHandle;
 use crate::runtime::RuntimeProvider;
 #[cfg(feature = "tokio")]
 use crate::runtime::TokioTime;
@@ -26,6 +24,7 @@ use crate::runtime::TokioTime;
 use crate::runtime::iocompat::AsyncIoTokioAsStd;
 use crate::tcp::{DnsTcpStream, TcpStream};
 use crate::xfer::DnsClientStream;
+use crate::{BufDnsStreamHandle, NetError};
 
 /// Tcp client stream
 ///
@@ -84,7 +83,7 @@ impl<S: DnsTcpStream> DnsClientStream for TcpClientStream<S> {
 }
 
 impl<S: DnsTcpStream> Stream for TcpClientStream<S> {
-    type Item = Result<SerialMessage, ProtoError>;
+    type Item = Result<SerialMessage, NetError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let message = try_ready_stream!(self.tcp_stream.poll_next_unpin(cx));

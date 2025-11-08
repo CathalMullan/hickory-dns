@@ -20,13 +20,13 @@ use tracing::{info, warn};
 #[cfg(feature = "__dnssec")]
 use hickory_client::client::Client;
 use hickory_client::client::ClientHandle;
+use hickory_net::NetError;
 #[cfg(feature = "__dnssec")]
 use hickory_net::runtime::TokioRuntimeProvider;
 use hickory_net::xfer::Protocol;
 #[cfg(feature = "__dnssec")]
 use hickory_proto::dnssec::Algorithm;
 use hickory_proto::{
-    ProtoError,
     op::{DnsResponse, ResponseCode},
     rr::{DNSClass, Name, RData, RecordType, rdata::A},
 };
@@ -272,7 +272,7 @@ pub fn query_message<C: ClientHandle>(
     client: &mut C,
     name: Name,
     record_type: RecordType,
-) -> Result<DnsResponse, ProtoError> {
+) -> Result<DnsResponse, NetError> {
     println!("sending request: {name} for: {record_type}");
     io_loop.block_on(client.query(name, DNSClass::IN, record_type))
 }

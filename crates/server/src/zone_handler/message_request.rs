@@ -6,8 +6,8 @@
 // copied, modified, or distributed except according to those terms.
 
 use crate::{
+    proto::{ProtoError, ProtoErrorKind},
     proto::{
-        ProtoError, ProtoErrorKind,
         op::{
             Edns, EmitAndCount, Header, LowerQuery, Message, MessageSignature, MessageType, OpCode,
             ResponseCode, emit_message_parts,
@@ -319,6 +319,7 @@ impl Queries {
 
     /// Validate that this set of Queries contains exactly one Query, and return a reference to the
     /// `LowerQuery` if so.
+    #[allow(clippy::result_large_err)]
     pub(crate) fn try_as_query(&self) -> Result<&LowerQuery, LookupError> {
         let count = self.queries.len();
         if count != 1 {
@@ -385,6 +386,7 @@ pub trait UpdateRequest {
     fn id(&self) -> u16;
 
     /// Zone being updated, this should be the query of a Message
+    #[allow(clippy::result_large_err)]
     fn zone(&self) -> Result<&LowerQuery, LookupError>;
 
     /// Prerequisites map to the Answer section of a Message

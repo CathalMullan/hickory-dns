@@ -12,7 +12,6 @@ use std::{
     time::Instant,
 };
 
-use hickory_resolver::NameServerTransportState;
 use ipnet::IpNet;
 use tracing::warn;
 
@@ -26,12 +25,14 @@ use crate::{
         op::{Message, Query},
     },
     recursor_dns_handle::RecursorDnsHandle,
+    resolver::NameServerTransportState,
     resolver::{ConnectionProvider, TlsConfig, TtlConfig, config::OpportunisticEncryption},
 };
 #[cfg(feature = "__dnssec")]
 use crate::{
     ErrorKind,
     net::{
+        NetError,
         dnssec::DnssecDnsHandle,
         xfer::{DnsHandle as _, FirstAnswer as _},
     },
@@ -215,6 +216,7 @@ impl<P: ConnectionProvider> RecursorBuilder<P> {
     /// # Panics
     ///
     /// This will panic if the roots are empty.
+    #[allow(clippy::result_large_err)]
     pub fn build(self, roots: &[IpAddr]) -> Result<Recursor<P>, Error> {
         Recursor::build(roots, self)
     }
@@ -269,6 +271,7 @@ impl<P: ConnectionProvider> Recursor<P> {
         !matches!(self.mode, RecursorMode::NonValidating { .. })
     }
 
+    #[allow(clippy::result_large_err)]
     fn build(roots: &[IpAddr], builder: RecursorBuilder<P>) -> Result<Self, Error> {
         let mut tls_config = TlsConfig::new()?;
         if builder.opportunistic_encryption.is_enabled() {
@@ -511,7 +514,7 @@ impl<P: ConnectionProvider> Recursor<P> {
                     };
 
                     Err(Error {
-                        kind: ErrorKind::Proto(ProtoError::from(dns_error)),
+                        kind: ErrorKind::Net(NetError::from(dns_error)),
                         #[cfg(feature = "backtrace")]
                         backtrack: None,
                     })
@@ -535,7 +538,7 @@ impl<P: ConnectionProvider> Recursor<P> {
                             .collect(),
                     );
 
-                    Err(Error::from(ProtoError::from(no_records)))
+                    Err(Error::from(NetError::from(ProtoError::from(no_records))))
                 } else {
                     let message = response.into_message();
                     validated_response_cache.insert(
@@ -582,7 +585,7 @@ mod for_dnssec {
     };
 
     use crate::ErrorKind;
-    use crate::net::xfer::DnsHandle;
+    use crate::net::{NetError, xfer::DnsHandle};
     use crate::proto::{
         ProtoError,
         op::{DnsRequest, DnsResponse, Message, OpCode},
@@ -591,7 +594,7 @@ mod for_dnssec {
     use crate::resolver::ConnectionProvider;
 
     impl<P: ConnectionProvider> DnsHandle for RecursorDnsHandle<P> {
-        type Response = BoxStream<'static, Result<DnsResponse, ProtoError>>;
+        type Response = BoxStream<'static, Result<DnsResponse, NetError>>;
         type Runtime = P::RuntimeProvider;
 
         fn send(&self, request: DnsRequest) -> Self::Response {
@@ -599,12 +602,12 @@ mod for_dnssec {
                 if let Some(query) = request.queries().first().cloned() {
                     query
                 } else {
-                    return Box::pin(stream::once(future::err(ProtoError::from(
+                    return Box::pin(stream::once(future::err(NetError::from(
                         "no query in request",
                     ))));
                 }
             } else {
-                return Box::pin(stream::once(future::err(ProtoError::from(
+                return Box::pin(stream::once(future::err(NetError::from(
                     "request is not a query",
                 ))));
             };
@@ -620,9 +623,8 @@ mod for_dnssec {
                     Ok(response) => response,
                     Err(e) => {
                         return Err(match e.kind() {
-                            // Translate back into a ProtoError::NoRecordsFound
-                            ErrorKind::Negative(_fwd) => e.into(),
-                            _ => ProtoError::from(e.to_string()),
+                            ErrorKind::Negative(_fwd) => NetError::from(ProtoError::from(e)),
+                            _ => NetError::from(e.to_string()),
                         });
                     }
                 };
@@ -635,7 +637,7 @@ mod for_dnssec {
                 msg.add_authorities(response.authorities().iter().cloned());
                 msg.add_additionals(response.additionals().iter().cloned());
 
-                DnsResponse::from_message(msg)
+                DnsResponse::from_message(msg).map_err(NetError::from)
             })
             .boxed()
         }
@@ -678,17 +680,19 @@ mod tests {
 
     use crate::{
         Error, Recursor,
+        net::NetError,
         proto::{op::Query, rr::RecordType},
         resolver::Name,
     };
 
     #[tokio::test]
+    #[allow(clippy::result_large_err)]
     async fn not_fully_qualified_domain_name_in_query() -> Result<(), Error> {
         subscribe();
 
         let j_root_servers_net_ip = IpAddr::from([192, 58, 128, 30]);
         let recursor = Recursor::builder().build(&[j_root_servers_net_ip])?;
-        let name = Name::from_ascii("example.com")?;
+        let name = Name::from_ascii("example.com").map_err(NetError::from)?;
         assert!(!name.is_fqdn());
         let query = Query::query(name, RecordType::A);
         let res = recursor

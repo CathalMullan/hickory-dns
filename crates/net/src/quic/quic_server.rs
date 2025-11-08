@@ -9,13 +9,13 @@ use alloc::sync::Arc;
 use core::net::SocketAddr;
 use std::io;
 
-use hickory_proto::ProtoError;
 use quinn::crypto::rustls::QuicServerConfig;
 use quinn::{Connection, Endpoint, ServerConfig};
 use rustls::server::ResolvesServerCert;
 use rustls::server::ServerConfig as TlsServerConfig;
 use rustls::version::TLS13;
 
+use crate::NetError;
 use crate::{rustls::default_provider, udp::UdpSocket};
 
 use super::{
@@ -33,7 +33,7 @@ impl QuicServer {
     pub async fn new(
         name_server: SocketAddr,
         server_cert_resolver: Arc<dyn ResolvesServerCert>,
-    ) -> Result<Self, ProtoError> {
+    ) -> Result<Self, NetError> {
         // setup a new socket for the server to use
         let socket = <tokio::net::UdpSocket as UdpSocket>::bind(name_server).await?;
         Self::with_socket(socket, server_cert_resolver)
@@ -43,7 +43,7 @@ impl QuicServer {
     pub fn with_socket(
         socket: tokio::net::UdpSocket,
         server_cert_resolver: Arc<dyn ResolvesServerCert>,
-    ) -> Result<Self, ProtoError> {
+    ) -> Result<Self, NetError> {
         let mut config = TlsServerConfig::builder_with_provider(Arc::new(default_provider()))
             .with_protocol_versions(&[&TLS13])
             .unwrap() // The ring default provider is guaranteed to support TLS 1.3
@@ -61,7 +61,7 @@ impl QuicServer {
     pub fn with_socket_and_tls_config(
         socket: tokio::net::UdpSocket,
         tls_config: Arc<TlsServerConfig>,
-    ) -> Result<Self, ProtoError> {
+    ) -> Result<Self, NetError> {
         let mut server_config =
             ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(tls_config)?));
         server_config.transport = Arc::new(quic_config::transport());
@@ -84,7 +84,7 @@ impl QuicServer {
     /// # Returns
     ///
     /// A remote connection that could have many potential bi-directional streams and the remote socket address
-    pub async fn next(&mut self) -> Result<Option<(QuicStreams, SocketAddr)>, ProtoError> {
+    pub async fn next(&mut self) -> Result<Option<(QuicStreams, SocketAddr)>, NetError> {
         let connecting = match self.endpoint.accept().await {
             Some(conn) => conn,
             None => return Ok(None),
@@ -111,7 +111,7 @@ pub struct QuicStreams {
 
 impl QuicStreams {
     /// Get the next bi directional stream from the client
-    pub async fn next(&mut self) -> Option<Result<QuicStream, ProtoError>> {
+    pub async fn next(&mut self) -> Option<Result<QuicStream, NetError>> {
         match self.connection.accept_bi().await {
             Ok((send_stream, receive_stream)) => {
                 Some(Ok(QuicStream::new(send_stream, receive_stream)))

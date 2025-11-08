@@ -10,13 +10,11 @@ use std::{io, net::SocketAddr};
 use tracing::{debug, error, trace};
 
 use crate::{
-    net::{BufDnsStreamHandle, DnsStreamHandle, xfer::Protocol},
+    net::{BufDnsStreamHandle, DnsStreamHandle, NetError, xfer::Protocol},
     proto::{
-        ProtoError,
         op::{Header, MessageType, OpCode, ResponseCode, SerialMessage},
         rr::Record,
-        serialize::binary::BinEncodable,
-        serialize::binary::BinEncoder,
+        serialize::binary::{BinEncodable, BinEncoder},
     },
     server::ResponseInfo,
     zone_handler::MessageResponse,
@@ -141,7 +139,7 @@ impl ResponseHandler for ResponseHandle {
 pub(crate) fn encode_fallback_servfail_response(
     id: u16,
     buffer: &mut Vec<u8>,
-) -> Result<ResponseInfo, ProtoError> {
+) -> Result<ResponseInfo, NetError> {
     buffer.clear();
     let mut encoder = BinEncoder::new(buffer);
     encoder.set_max_size(512);

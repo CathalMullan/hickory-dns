@@ -11,8 +11,9 @@ use hickory_integration::{
     mock_request_handler::{MockHandler, fetch_dnskey},
     print_response, setup_dnssec_client_server,
 };
+use hickory_net::NetErrorKind;
 use hickory_proto::{
-    DnsError, ProtoErrorKind,
+    DnsError, ProtoError, ProtoErrorKind,
     dnssec::{
         Algorithm, DigestType, Proof, SigSigner, SigningKey,
         crypto::Ed25519SigningKey,
@@ -279,8 +280,12 @@ async fn test_exclude_nsec(
         .query(query_name.clone(), DNSClass::IN, query_type)
         .await
         .unwrap_err();
-    let ProtoErrorKind::Dns(DnsError::Nsec { proof, .. }) = error.kind() else {
-        panic!("wrong proto error kind {error}");
+    let NetErrorKind::Proto(ProtoError {
+        kind: ProtoErrorKind::Dns(DnsError::Nsec { proof, .. }),
+        ..
+    }) = error.kind()
+    else {
+        panic!("wrong error kind {error}");
     };
     assert_eq!(proof, &Proof::Bogus);
 }

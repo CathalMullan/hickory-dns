@@ -9,11 +9,11 @@
 
 use core::str::FromStr;
 
-use hickory_proto::ProtoError;
 use http::header::{ACCEPT, CONTENT_LENGTH, CONTENT_TYPE};
 use http::{Request, Uri, header, uri};
 use tracing::debug;
 
+use crate::NetError;
 use crate::http::Version;
 use crate::http::error::Result;
 
@@ -28,6 +28,7 @@ use crate::http::error::Result;
 /// request (as described in Section 6), encoded with base64url
 /// [RFC4648].
 /// ```
+#[allow(clippy::result_large_err)]
 pub fn new(
     version: Version,
     name_server_name: &str,
@@ -49,16 +50,16 @@ pub fn new(
     let mut parts = uri::Parts::default();
     parts.path_and_query = Some(
         uri::PathAndQuery::try_from(query_path)
-            .map_err(|e| ProtoError::from(format!("invalid DoH path: {e}")))?,
+            .map_err(|e| NetError::from(format!("invalid DoH path: {e}")))?,
     );
     parts.scheme = Some(uri::Scheme::HTTPS);
     parts.authority = Some(
         uri::Authority::from_str(name_server_name)
-            .map_err(|e| ProtoError::from(format!("invalid authority: {e}")))?,
+            .map_err(|e| NetError::from(format!("invalid authority: {e}")))?,
     );
 
     let url =
-        Uri::from_parts(parts).map_err(|e| ProtoError::from(format!("uri parse error: {e}")))?;
+        Uri::from_parts(parts).map_err(|e| NetError::from(format!("uri parse error: {e}")))?;
 
     // TODO: add user agent to TypedHeaders
     let request = Request::builder()
@@ -69,12 +70,13 @@ pub fn new(
         .header(ACCEPT, crate::http::MIME_APPLICATION_DNS)
         .header(CONTENT_LENGTH, message_len)
         .body(())
-        .map_err(|e| ProtoError::from(format!("http stream errored: {e}")))?;
+        .map_err(|e| NetError::from(format!("http stream errored: {e}")))?;
 
     Ok(request)
 }
 
 /// Verifies the request is something we know what to deal with
+#[allow(clippy::result_large_err)]
 pub fn verify<T>(
     version: Version,
     name_server: Option<&str>,

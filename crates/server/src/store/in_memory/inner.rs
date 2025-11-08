@@ -15,9 +15,11 @@ use time::OffsetDateTime;
 use tracing::debug;
 use tracing::{error, warn};
 
+use super::maybe_next_name;
 #[cfg(feature = "__dnssec")]
 use crate::{
     dnssec::NxProofKind,
+    net::NetError,
     proto::{
         ProtoError,
         dnssec::{
@@ -27,8 +29,6 @@ use crate::{
     },
     zone_handler::{LookupError, Nsec3QueryInfo},
 };
-
-use super::maybe_next_name;
 use crate::{
     proto::rr::{
         DNSClass, LowerName, Name, RData, Record, RecordSet, RecordType, RrKey, rdata::SOA,
@@ -50,6 +50,7 @@ pub(super) struct InnerInMemory {
 
 impl InnerInMemory {
     #[cfg(feature = "__dnssec")]
+    #[allow(clippy::result_large_err)]
     pub(super) fn proof(
         &self,
         info: Nsec3QueryInfo<'_>,
@@ -782,7 +783,7 @@ impl InnerInMemory {
         name: &LowerName,
         zone: &Name,
         info: &Nsec3QueryInfo<'_>,
-    ) -> Result<Option<Arc<RecordSet>>, ProtoError> {
+    ) -> Result<Option<Arc<RecordSet>>, NetError> {
         let owner_name = info.hashed_owner_name(name, zone)?;
         let records = self
             .records
@@ -809,7 +810,7 @@ impl InnerInMemory {
         name: &LowerName,
         zone: &Name,
         info: &Nsec3QueryInfo<'_>,
-    ) -> Result<Option<(LowerName, Arc<RecordSet>)>, ProtoError> {
+    ) -> Result<Option<(LowerName, Arc<RecordSet>)>, NetError> {
         let mut next_closer_name = name.clone();
         let mut closest_encloser = next_closer_name.base_name();
 

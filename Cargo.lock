@@ -873,6 +873,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "cfg-if",
+ "enum-as-inner",
  "futures-channel",
  "futures-executor",
  "futures-io",
@@ -882,6 +883,8 @@ dependencies = [
  "h3-quinn",
  "hickory-proto",
  "http",
+ "jni",
+ "js-sys",
  "once_cell",
  "quinn",
  "rand",
@@ -894,6 +897,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tracing",
+ "wasm-bindgen",
  "webpki-roots",
 ]
 
@@ -910,14 +914,10 @@ dependencies = [
  "enum-as-inner",
  "idna",
  "ipnet",
- "jni",
- "js-sys",
  "once_cell",
  "prefix-trie",
- "quinn",
  "rand",
  "ring",
- "rustls",
  "rustls-pki-types",
  "serde",
  "thiserror 2.0.17",
@@ -925,7 +925,6 @@ dependencies = [
  "tinyvec",
  "tracing",
  "url",
- "wasm-bindgen",
 ]
 
 [[package]]

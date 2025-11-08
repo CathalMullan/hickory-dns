@@ -4,9 +4,9 @@ use std::net::IpAddr;
 use tracing::{trace, warn};
 
 use crate::config::{NameServerConfig, ResolverConfig, ResolverOpts};
-use crate::proto::ProtoError;
+use crate::net::NetError;
 
-pub fn read_system_conf() -> Result<(ResolverConfig, ResolverOpts), ProtoError> {
+pub fn read_system_conf() -> Result<(ResolverConfig, ResolverOpts), NetError> {
     let ctx = ndk_context::android_context();
     let activity = unsafe { JObject::from_raw(ctx.context().cast()) };
     let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }?;

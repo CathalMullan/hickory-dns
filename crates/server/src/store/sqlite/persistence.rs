@@ -17,6 +17,7 @@ use time;
 use tracing::error;
 
 use crate::error::{PersistenceError, PersistenceErrorKind};
+use crate::net::NetError;
 use crate::proto::rr::Record;
 use crate::proto::serialize::binary::{BinDecodable, BinDecoder, BinEncodable, BinEncoder};
 
@@ -31,6 +32,7 @@ pub struct Journal {
 
 impl Journal {
     /// Constructs a new Journal, attaching to the specified Sqlite Connection
+    #[allow(clippy::result_large_err)]
     pub fn new(conn: Connection) -> Result<Self, PersistenceError> {
         let version = Self::select_schema_version(&conn)?;
         Ok(Self {
@@ -40,6 +42,7 @@ impl Journal {
     }
 
     /// Constructs a new Journal opening a Sqlite connection to the file at the specified path
+    #[allow(clippy::result_large_err)]
     pub fn from_file(journal_file: &Path) -> Result<Self, PersistenceError> {
         let result = Self::new(Connection::open(journal_file)?);
         let mut journal = result?;
@@ -70,6 +73,7 @@ impl Journal {
     /// # Argument
     ///
     /// * `record` - will be serialized into the journal
+    #[allow(clippy::result_large_err)]
     pub fn insert_record(&self, soa_serial: u32, record: &Record) -> Result<(), PersistenceError> {
         assert!(
             self.version == CURRENT_VERSION,
@@ -79,7 +83,7 @@ impl Journal {
         let mut serial_record: Vec<u8> = Vec::with_capacity(512);
         {
             let mut encoder = BinEncoder::new(&mut serial_record);
-            record.emit(&mut encoder)?;
+            record.emit(&mut encoder).map_err(NetError::from)?;
         }
 
         let timestamp = time::OffsetDateTime::now_utc();
@@ -113,6 +117,7 @@ impl Journal {
     }
 
     /// Inserts a set of records into the Journal, a convenience method for insert_record
+    #[allow(clippy::result_large_err)]
     pub fn insert_records(
         &self,
         soa_serial: u32,
@@ -135,6 +140,7 @@ impl Journal {
     ///
     /// * `row_id` - the row_id can either be exact, or start at 0 to get the earliest row in the
     ///   list.
+    #[allow(clippy::result_large_err)]
     pub fn select_record(&self, row_id: i64) -> Result<Option<(i64, Record)>, PersistenceError> {
         assert!(
             self.version == CURRENT_VERSION,
@@ -182,6 +188,7 @@ impl Journal {
     /// # Arguments
     ///
     /// * `conn` - db connection to use
+    #[allow(clippy::result_large_err)]
     pub fn select_schema_version(conn: &Connection) -> Result<i64, PersistenceError> {
         // first see if our schema is there
         let mut stmt = conn.prepare(
@@ -217,6 +224,7 @@ impl Journal {
     }
 
     /// update the schema version
+    #[allow(clippy::result_large_err)]
     fn update_schema_version(&self, new_version: i64) -> Result<(), PersistenceError> {
         // validate the versions of all the schemas...
         assert!(new_version <= CURRENT_VERSION);
@@ -233,6 +241,7 @@ impl Journal {
     }
 
     /// initializes the schema for the Journal
+    #[allow(clippy::result_large_err)]
     pub fn schema_up(&mut self) -> Result<i64, PersistenceError> {
         while self.version < CURRENT_VERSION {
             match self.version + 1 {
@@ -248,6 +257,7 @@ impl Journal {
     }
 
     /// initial schema, include the tdns_schema table for tracking the Journal version
+    #[allow(clippy::result_large_err)]
     fn init_up(&self) -> Result<i64, PersistenceError> {
         let count = self.conn.lock().expect("conn poisoned").execute(
             "CREATE TABLE tdns_schema (
@@ -273,6 +283,7 @@ impl Journal {
 
     /// adds the records table, this is the main and single table for the history of changes to a
     ///  zone. Each record is expected to be in the format of an update record
+    #[allow(clippy::result_large_err)]
     fn records_up(&self) -> Result<i64, PersistenceError> {
         // we'll be using rowid for our primary key, basically: `rowid INTEGER PRIMARY KEY ASC`
         let count = self.conn.lock().expect("conn poisoned").execute(

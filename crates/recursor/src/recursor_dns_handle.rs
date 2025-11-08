@@ -61,6 +61,7 @@ pub(crate) struct RecursorDnsHandle<P: ConnectionProvider> {
 }
 
 impl<P: ConnectionProvider> RecursorDnsHandle<P> {
+    #[allow(clippy::result_large_err)]
     pub(super) fn build_recursor_mode(
         roots: &[IpAddr],
         tls: TlsConfig,

@@ -9,9 +9,11 @@ use std::{
 };
 
 use futures_util::stream::{FuturesUnordered, StreamExt};
-use hickory_net::xfer::{DnsHandle, FirstAnswer};
+use hickory_net::{
+    NetError,
+    xfer::{DnsHandle, FirstAnswer},
+};
 use hickory_proto::{
-    ProtoError,
     op::{DnsRequestOptions, Message, Query, ResponseCode},
     rr::{Name, RecordType},
 };
@@ -22,7 +24,7 @@ use hickory_resolver::{
 use test_support::{MockNetworkHandler, MockProvider, MockRecord, subscribe};
 
 #[tokio::test]
-async fn test_shared_lookup() -> Result<(), ProtoError> {
+async fn test_shared_lookup() -> Result<(), NetError> {
     subscribe();
 
     let query_name = Name::from_ascii("host.hickory-dns.testing.")?;

@@ -6,8 +6,8 @@
 // copied, modified, or distributed except according to those terms.
 
 use crate::{
+    net::NetError,
     proto::{
-        ProtoError,
         op::{Edns, Header, MessageSignature, ResponseCode, emit_message_parts},
         rr::Record,
         serialize::binary::BinEncoder,
@@ -75,7 +75,7 @@ where
     pub fn destructive_emit(
         mut self,
         encoder: &mut BinEncoder<'_>,
-    ) -> Result<ResponseInfo, ProtoError> {
+    ) -> Result<ResponseInfo, NetError> {
         // soa records are part of the authority section
         let mut authorities = self.authorities.chain(self.soa);
 
@@ -90,6 +90,7 @@ where
             encoder,
         )
         .map(Into::into)
+        .map_err(NetError::from)
     }
 }
 

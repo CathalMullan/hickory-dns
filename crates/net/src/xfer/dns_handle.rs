@@ -8,22 +8,22 @@
 //! `DnsHandle` types perform conversions of the raw DNS messages before sending the messages on the specified streams.
 
 use futures_util::stream::Stream;
-use hickory_proto::ProtoError;
 use hickory_proto::op::{DnsRequest, DnsRequestOptions, DnsResponse, Query, SerialMessage};
 use tracing::debug;
 
+use crate::NetError;
 use crate::runtime::RuntimeProvider;
 
 /// Implementations of Sinks for sending DNS messages
 pub trait DnsStreamHandle: 'static + Send {
     /// Sends a message to the Handle for delivery to the server.
-    fn send(&mut self, buffer: SerialMessage) -> Result<(), ProtoError>;
+    fn send(&mut self, buffer: SerialMessage) -> Result<(), NetError>;
 }
 
 /// A trait for implementing high level functions of DNS.
 pub trait DnsHandle: 'static + Clone + Send + Sync + Unpin {
     /// The associated response from the response stream, this should resolve to the Response messages
-    type Response: Stream<Item = Result<DnsResponse, ProtoError>> + Send + Unpin + 'static;
+    type Response: Stream<Item = Result<DnsResponse, NetError>> + Send + Unpin + 'static;
 
     /// The asynchronous runtime in use.
     type Runtime: RuntimeProvider;

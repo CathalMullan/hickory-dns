@@ -14,10 +14,10 @@ use std::sync::Arc;
 use futures_util::future::BoxFuture;
 use rustls::pki_types::ServerName;
 
-use crate::proto::BufDnsStreamHandle;
-use crate::proto::ProtoError;
 use crate::net::rustls::TlsClientStream;
 use crate::net::rustls::tls_client_stream::tls_client_connect_with_future;
+use crate::proto::BufDnsStreamHandle;
+use crate::proto::ProtoError;
 use crate::proto::tcp::DnsTcpStream;
 
 pub(crate) fn new_tls_stream_with_future<S, F>(
@@ -26,7 +26,7 @@ pub(crate) fn new_tls_stream_with_future<S, F>(
     server_name: ServerName<'static>,
     mut tls_config: rustls::ClientConfig,
 ) -> (
-    BoxFuture<'static, Result<TlsClientStream<S>, ProtoError>>,
+    BoxFuture<'static, Result<TlsClientStream<S>, NetError>>,
     BufDnsStreamHandle,
 )
 where

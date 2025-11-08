@@ -23,6 +23,8 @@ use futures_util::{
     Future, FutureExt,
     future::{BoxFuture, Shared},
 };
+use hickory_net::{NetError, NetErrorKind};
+use hickory_proto::{ProtoError, ProtoErrorKind};
 use parking_lot::Mutex;
 use smallvec::SmallVec;
 use tracing::{debug, error, info};
@@ -39,7 +41,7 @@ use crate::net::{
     xfer::{DnsHandle, Protocol},
 };
 use crate::proto::{
-    DnsError, NoRecords, ProtoError, ProtoErrorKind,
+    DnsError, NoRecords,
     access_control::AccessControlSet,
     op::{DnsRequest, DnsRequestOptions, DnsResponse, OpCode, Query, ResponseCode},
     rr::{
@@ -60,10 +62,10 @@ pub struct NameServerPool<P: ConnectionProvider> {
 }
 
 #[derive(Clone)]
-pub(crate) struct SharedLookup(Shared<BoxFuture<'static, Option<Result<DnsResponse, ProtoError>>>>);
+pub(crate) struct SharedLookup(Shared<BoxFuture<'static, Option<Result<DnsResponse, NetError>>>>);
 
 impl Future for SharedLookup {
-    type Output = Result<DnsResponse, ProtoError>;
+    type Output = Result<DnsResponse, NetError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.0.poll_unpin(cx).map(|o| match o {
@@ -173,7 +175,7 @@ type TtlInstant = std::time::Instant;
 type TtlInstant = tokio::time::Instant;
 
 impl<P: ConnectionProvider> DnsHandle for NameServerPool<P> {
-    type Response = Pin<Box<dyn Stream<Item = Result<DnsResponse, ProtoError>> + Send>>;
+    type Response = Pin<Box<dyn Stream<Item = Result<DnsResponse, NetError>> + Send>>;
     type Runtime = P::RuntimeProvider;
 
     fn lookup(&self, query: Query, mut options: DnsRequestOptions) -> Self::Response {
@@ -261,12 +263,15 @@ impl<P: ConnectionProvider> DnsHandle for NameServerPool<P> {
                     && response.authorities().is_empty()
                     && authorities_len != 0)
             {
-                return Err(NoRecords::new(Box::new(query.clone()), ResponseCode::NXDomain).into());
+                return Err(ProtoError::from(NoRecords::new(
+                    Box::new(query.clone()),
+                    ResponseCode::NXDomain,
+                )))?;
             }
 
             // Since the message might have changed, create a new response from
             // the message to update the buffer.
-            DnsResponse::from_message(response.into_message())
+            DnsResponse::from_message(response.into_message()).map_err(NetError::from)
         }))
     }
 }
@@ -278,7 +283,7 @@ struct PoolState<P: ConnectionProvider> {
 }
 
 impl<P: ConnectionProvider> PoolState<P> {
-    async fn try_send(&self, request: DnsRequest) -> Result<DnsResponse, ProtoError> {
+    async fn try_send(&self, request: DnsRequest) -> Result<DnsResponse, NetError> {
         let mut servers = self.servers.clone();
         match self.cx.options.server_ordering_strategy {
             // select the highest priority connection
@@ -304,7 +309,7 @@ impl<P: ConnectionProvider> PoolState<P> {
             }
         }
 
-        // If the name server we're trying is giving us backpressure by returning ProtoErrorKind::Busy,
+        // If the name server we're trying is giving us backpressure by returning NetErrorKind::Busy,
         // we will first try the other name servers (as for other error types). However, if the other
         // servers are also busy, we're going to wait for a little while and then retry each server that
         // returned Busy in the previous round. If the server is still Busy, this continues, while
@@ -317,7 +322,7 @@ impl<P: ConnectionProvider> PoolState<P> {
         let mut servers = VecDeque::from(servers);
         let mut backoff = Duration::from_millis(20);
         let mut busy = SmallVec::<[Arc<NameServer<P>>; 2]>::new();
-        let mut err = ProtoError::from(ProtoErrorKind::NoConnections);
+        let mut err = NetError::from(NetErrorKind::NoConnections);
         let mut policy = ConnectionPolicy::default();
 
         loop {
@@ -366,7 +371,7 @@ impl<P: ConnectionProvider> PoolState<P> {
                     Ok(response) if response.truncated() => {
                         debug!("truncated response received, retrying over TCP");
                         policy.disable_udp = true;
-                        err = ProtoError::from("received truncated response");
+                        err = NetError::from("received truncated response");
                         servers.push_front(server);
                         continue;
                     }
@@ -377,21 +382,25 @@ impl<P: ConnectionProvider> PoolState<P> {
                 match e.kind() {
                     // We assume the response is spoofed, so ignore it and avoid UDP server for this
                     // request to try and avoid further spoofing.
-                    ProtoErrorKind::QueryCaseMismatch => {
+                    NetErrorKind::QueryCaseMismatch => {
                         servers.push_front(server);
                         policy.disable_udp = true;
                         continue;
                     }
                     // If the server is busy, try it again later if necessary.
-                    ProtoErrorKind::Busy => busy.push(server),
+                    NetErrorKind::Busy => busy.push(server),
                     // If the connection failed, try another one.
-                    ProtoErrorKind::Io(_) | ProtoErrorKind::NoConnections => {}
+                    NetErrorKind::Io(_) | NetErrorKind::NoConnections => {}
                     // If we got an `NXDomain` response from a server whose negative responses we
                     // don't trust, we should try another server.
-                    ProtoErrorKind::Dns(DnsError::NoRecordsFound(NoRecords {
-                        response_code: ResponseCode::NXDomain,
+                    NetErrorKind::Proto(ProtoError {
+                        kind:
+                            ProtoErrorKind::Dns(DnsError::NoRecordsFound(NoRecords {
+                                response_code: ResponseCode::NXDomain,
+                                ..
+                            })),
                         ..
-                    })) if !server.trust_negative_responses() => {}
+                    }) if !server.trust_negative_responses() => {}
                     _ => return Err(e),
                 }
 
@@ -496,11 +505,11 @@ impl NameServerTransportState {
     }
 
     /// Update the transport state for the given IP and protocol to record a received error.
-    pub(crate) fn error_received(&mut self, ip: IpAddr, protocol: Protocol, error: &ProtoError) {
+    pub(crate) fn error_received(&mut self, ip: IpAddr, protocol: Protocol, error: &NetError) {
         self.0.insert(
             (ip, protocol),
             match error.kind() {
-                ProtoErrorKind::Timeout => TransportState::TimedOut {
+                NetErrorKind::Timeout => TransportState::TimedOut {
                     #[cfg(any(feature = "__tls", feature = "__quic"))]
                     completed_at: Instant::now(),
                 },
