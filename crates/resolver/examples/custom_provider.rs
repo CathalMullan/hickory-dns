@@ -8,7 +8,9 @@ use {
     hickory_resolver::{
         ConnectionProvider, Resolver,
         config::{GOOGLE, ResolverConfig},
-        net::runtime::{RuntimeProvider, TokioHandle, TokioTime, iocompat::AsyncIoTokioAsStd},
+        net::runtime::{
+            RuntimeProvider, TokioHandle, TokioTime, TokioUdpSocket, iocompat::AsyncIoTokioAsStd,
+        },
     },
     std::future::Future,
     std::io,
@@ -29,7 +31,7 @@ struct PrintProvider {
 impl RuntimeProvider for PrintProvider {
     type Handle = TokioHandle;
     type Timer = TokioTime;
-    type Udp = UdpSocket;
+    type Udp = TokioUdpSocket;
     type Tcp = AsyncIoTokioAsStd<TcpStream>;
 
     fn create_handle(&self) -> Self::Handle {
@@ -74,7 +76,7 @@ impl RuntimeProvider for PrintProvider {
         // The server_addr parameter is used only when you need to establish a tunnel or something similar.
         // For example, you try to use a http proxy and encapsulate UDP packets inside a TCP stream.
         println!("Create udp local_addr: {local_addr}, server_addr: {server_addr}");
-        Box::pin(async move { UdpSocket::bind(local_addr).await })
+        Box::pin(async move { UdpSocket::bind(local_addr).await.map(Into::into) })
     }
 }
 

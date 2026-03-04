@@ -21,7 +21,7 @@ use rustls::server::ResolvesServerCert;
 use rustls::server::ServerConfig as TlsServerConfig;
 use rustls::version::TLS13;
 
-use crate::{error::NetError, tls::default_provider, udp::UdpSocket};
+use crate::{error::NetError, tls::default_provider};
 
 use super::ALPN_H3;
 
@@ -37,7 +37,7 @@ impl H3Server {
         server_cert_resolver: Arc<dyn ResolvesServerCert>,
     ) -> Result<Self, NetError> {
         // setup a new socket for the server to use
-        let socket = <tokio::net::UdpSocket as UdpSocket>::bind(name_server).await?;
+        let socket = tokio::net::UdpSocket::bind(name_server).await?;
         Self::with_socket(socket, server_cert_resolver)
     }
 

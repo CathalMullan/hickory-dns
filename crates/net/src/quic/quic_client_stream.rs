@@ -25,9 +25,8 @@ use crate::{
     error::NetError,
     proto::op::{DnsRequest, DnsResponse},
     quic::quic_stream::{DoqErrorCode, QuicStream},
-    runtime::{RuntimeProvider, Spawn},
+    runtime::{RuntimeProvider, Spawn, TokioUdpSocket, UdpSocket},
     tls::client_config,
-    udp::UdpSocket,
     xfer::{CONNECT_TIMEOUT, DnsExchange, DnsRequestSender, DnsResponseStream},
 };
 
@@ -276,9 +275,9 @@ impl QuicClientStreamBuilder {
         server_name: Arc<str>,
     ) -> Result<QuicClientStream, NetError> {
         let connect = if let Some(bind_addr) = self.bind_addr {
-            <tokio::net::UdpSocket as UdpSocket>::connect_with_bind(name_server, bind_addr)
+            <TokioUdpSocket as UdpSocket>::connect_with_bind(name_server, bind_addr)
         } else {
-            <tokio::net::UdpSocket as UdpSocket>::connect(name_server)
+            <TokioUdpSocket as UdpSocket>::connect(name_server)
         };
 
         let socket = connect.await?;

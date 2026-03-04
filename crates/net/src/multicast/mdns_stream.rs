@@ -19,13 +19,12 @@ use futures_util::{
     stream::{Stream, StreamExt},
 };
 use socket2::{self, Socket};
-use tokio::net::UdpSocket;
 use tracing::{debug, trace};
 
 use crate::BufDnsStreamHandle;
 use crate::multicast::MdnsQueryType;
 use crate::proto::op::SerialMessage;
-use crate::runtime::TokioRuntimeProvider;
+use crate::runtime::{TokioRuntimeProvider, TokioUdpSocket};
 use crate::udp::UdpStream;
 
 pub(crate) const MDNS_PORT: u16 = 5353;
@@ -49,7 +48,7 @@ pub struct MdnsStream {
     datagram: Option<UdpStream<TokioRuntimeProvider>>,
     // FIXME: like UdpStream, this Arc is unnecessary, only needed for temp async/await capture below
     /// In one-shot multicast, this will not join the multicast group
-    multicast: Option<Arc<UdpSocket>>,
+    multicast: Option<Arc<TokioUdpSocket>>,
     /// Receiving portion of the MdnsStream
     rcving_mcast: Option<BoxFuture<'static, io::Result<SerialMessage>>>,
 }
@@ -143,7 +142,7 @@ impl MdnsStream {
             let datagram = if let Some(socket) = next_socket.await? {
                 socket.set_nonblocking(true)?;
                 Some(UdpStream::from_parts(
-                    UdpSocket::from_std(socket)?,
+                    TokioUdpSocket::from_std(socket)?,
                     outbound_messages,
                 ))
             } else {
@@ -151,7 +150,7 @@ impl MdnsStream {
             };
 
             let multicast = if let Some(multicast_socket) = multicast_socket {
-                Some(Arc::new(UdpSocket::from_std(multicast_socket)?))
+                Some(Arc::new(TokioUdpSocket::from_std(multicast_socket)?))
             } else {
                 None
             };

@@ -2074,11 +2074,11 @@ mod mock_provider {
 
     use futures_util::stream::once;
     use futures_util::{Stream, future};
-    use tokio::net::UdpSocket;
 
     use super::*;
     use crate::config::ProtocolConfig;
     use crate::net::runtime::TokioTime;
+    use crate::net::runtime::TokioUdpSocket;
     use crate::net::runtime::iocompat::AsyncIoTokioAsStd;
     use crate::proto::op::Message;
 
@@ -2167,7 +2167,7 @@ mod mock_provider {
     impl RuntimeProvider for MockSyncRuntimeProvider {
         type Handle = MockSyncHandle;
         type Timer = TokioTime;
-        type Udp = UdpSocket;
+        type Udp = TokioUdpSocket;
         type Tcp = AsyncIoTokioAsStd<tokio::net::TcpStream>;
 
         fn create_handle(&self) -> Self::Handle {

@@ -831,6 +831,7 @@ dependencies = [
  "h3",
  "h3-quinn",
  "hickory-proto",
+ "hickory-runtime",
  "http",
  "idna",
  "ipnet",
@@ -920,6 +921,17 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "webpki-roots",
+]
+
+[[package]]
+name = "hickory-runtime"
+version = "0.26.0-alpha.1"
+dependencies = [
+ "async-trait",
+ "futures-io",
+ "quinn",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

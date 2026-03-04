@@ -23,7 +23,10 @@ pub mod http;
 pub mod multicast;
 #[cfg(all(feature = "__quic", feature = "tokio"))]
 pub mod quic;
-pub mod runtime;
+pub mod runtime {
+    //! Abstractions to deal with different async runtimes.
+    pub use hickory_runtime::*;
+}
 pub mod tcp;
 #[cfg(feature = "__tls")]
 pub mod tls;

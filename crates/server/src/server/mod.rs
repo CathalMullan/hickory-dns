@@ -39,7 +39,7 @@ use crate::{
     access::AccessControl,
     net::{
         BufDnsStreamHandle, NetError,
-        runtime::{TokioRuntimeProvider, TokioTime, iocompat::AsyncIoTokioAsStd},
+        runtime::{TokioRuntimeProvider, TokioTime, TokioUdpSocket, iocompat::AsyncIoTokioAsStd},
         tcp::TcpStream,
         udp::UdpStream,
         xfer::Protocol,
@@ -432,8 +432,10 @@ async fn handle_udp(
 
     // create the new UdpStream, the IP address isn't relevant, and ideally goes essentially no where.
     //   the address used is acquired from the inbound queries
-    let (mut stream, stream_handle) =
-        UdpStream::<TokioRuntimeProvider>::with_bound(socket, ([127, 255, 255, 254], 0).into());
+    let (mut stream, stream_handle) = UdpStream::<TokioRuntimeProvider>::with_bound(
+        TokioUdpSocket::from(socket),
+        ([127, 255, 255, 254], 0).into(),
+    );
 
     let mut inner_join_set = JoinSet::new();
     loop {

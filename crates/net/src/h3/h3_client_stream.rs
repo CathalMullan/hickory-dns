@@ -27,9 +27,8 @@ use crate::http::{RequestContext, SetHeaders, Version};
 use crate::proto::ProtoError;
 use crate::proto::op::{DnsRequest, DnsResponse};
 use crate::quic::connect_quic;
-use crate::runtime::{RuntimeProvider, Spawn};
+use crate::runtime::{RuntimeProvider, Spawn, TokioUdpSocket, UdpSocket};
 use crate::tls::client_config;
-use crate::udp::UdpSocket;
 use crate::xfer::{DnsExchange, DnsRequestSender, DnsResponseStream};
 
 use super::ALPN_H3;
@@ -390,9 +389,9 @@ impl H3ClientStreamBuilder {
         path: Arc<str>,
     ) -> Result<H3ClientStream, NetError> {
         let connect = if let Some(bind_addr) = self.bind_addr {
-            <tokio::net::UdpSocket as UdpSocket>::connect_with_bind(name_server, bind_addr)
+            <TokioUdpSocket as UdpSocket>::connect_with_bind(name_server, bind_addr)
         } else {
-            <tokio::net::UdpSocket as UdpSocket>::connect(name_server)
+            <TokioUdpSocket as UdpSocket>::connect(name_server)
         };
 
         let socket = connect.await?;

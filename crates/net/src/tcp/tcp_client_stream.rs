@@ -16,10 +16,6 @@ use tracing::warn;
 
 use crate::error::NetError;
 use crate::proto::op::SerialMessage;
-#[cfg(feature = "tokio")]
-use crate::runtime::TokioTime;
-#[cfg(feature = "tokio")]
-use crate::runtime::iocompat::AsyncIoTokioAsStd;
 use crate::runtime::{DnsTcpStream, RuntimeProvider, Spawn};
 use crate::tcp::TcpStream;
 use crate::xfer::{DnsClientStream, DnsExchange};
@@ -111,14 +107,6 @@ impl<S: DnsTcpStream> Stream for TcpClientStream<S> {
 
         Poll::Ready(Some(Ok(message)))
     }
-}
-
-#[cfg(feature = "tokio")]
-impl<T> DnsTcpStream for AsyncIoTokioAsStd<T>
-where
-    T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + Sized + 'static,
-{
-    type Time = TokioTime;
 }
 
 #[cfg(test)]

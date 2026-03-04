@@ -12,7 +12,6 @@ use std::collections::HashSet;
 use std::io;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use futures_util::{
     future::{BoxFuture, Future},
     ready,
@@ -25,19 +24,6 @@ use crate::proto::op::SerialMessage;
 use crate::runtime::{DnsUdpSocket, RuntimeProvider};
 use crate::udp::MAX_RECEIVE_BUFFER_SIZE;
 use crate::xfer::{BufDnsStreamHandle, StreamReceiver};
-
-/// Trait for UdpSocket
-#[async_trait]
-pub trait UdpSocket: DnsUdpSocket {
-    /// setups up a "client" udp connection that will only receive packets from the associated address
-    async fn connect(addr: SocketAddr) -> io::Result<Self>;
-
-    /// same as connect, but binds to the specified local address for sending address
-    async fn connect_with_bind(addr: SocketAddr, bind_addr: SocketAddr) -> io::Result<Self>;
-
-    /// a "server" UDP socket, that bind to the local listening address, and unbound remote address (can receive from anything)
-    async fn bind(addr: SocketAddr) -> io::Result<Self>;
-}
 
 /// A UDP stream of DNS binary packets
 #[must_use = "futures do nothing unless polled"]
@@ -305,63 +291,6 @@ impl<P: RuntimeProvider> Future for NextRandomUdpSocket<P> {
 }
 
 const ATTEMPT_RANDOM: usize = 10;
-
-#[cfg(feature = "tokio")]
-#[async_trait]
-impl UdpSocket for tokio::net::UdpSocket {
-    /// sets up up a "client" udp connection that will only receive packets from the associated address
-    ///
-    /// if the addr is ipv4 then it will bind local addr to 0.0.0.0:0, ipv6 \[::\]0
-    async fn connect(addr: SocketAddr) -> io::Result<Self> {
-        let bind_addr: SocketAddr = match addr {
-            SocketAddr::V4(_addr) => (Ipv4Addr::UNSPECIFIED, 0).into(),
-            SocketAddr::V6(_addr) => (Ipv6Addr::UNSPECIFIED, 0).into(),
-        };
-
-        Self::connect_with_bind(addr, bind_addr).await
-    }
-
-    /// same as connect, but binds to the specified local address for sending address
-    async fn connect_with_bind(_addr: SocketAddr, bind_addr: SocketAddr) -> io::Result<Self> {
-        let socket = Self::bind(bind_addr).await?;
-
-        // TODO: research connect more, it appears to break UDP receiving tests, etc...
-        // socket.connect(addr).await?;
-
-        Ok(socket)
-    }
-
-    async fn bind(addr: SocketAddr) -> io::Result<Self> {
-        Self::bind(addr).await
-    }
-}
-
-#[cfg(feature = "tokio")]
-#[async_trait]
-impl DnsUdpSocket for tokio::net::UdpSocket {
-    type Time = crate::runtime::TokioTime;
-
-    fn poll_recv_from(
-        &self,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<io::Result<(usize, SocketAddr)>> {
-        let mut buf = tokio::io::ReadBuf::new(buf);
-        let addr = ready!(Self::poll_recv_from(self, cx, &mut buf))?;
-        let len = buf.filled().len();
-
-        Poll::Ready(Ok((len, addr)))
-    }
-
-    fn poll_send_to(
-        &self,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-        target: SocketAddr,
-    ) -> Poll<io::Result<usize>> {
-        Self::poll_send_to(self, cx, buf, target)
-    }
-}
 
 #[cfg(test)]
 #[cfg(feature = "tokio")]

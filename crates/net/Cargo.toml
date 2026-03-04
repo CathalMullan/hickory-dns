@@ -30,9 +30,9 @@ https-ring = ["tls-ring", "__https"]
 quic-ring = ["quinn/rustls-ring", "tls-ring", "__quic"]
 h3-ring = ["quic-ring", "__h3"]
 
-__tls = ["dep:bytes", "dep:rustls", "dep:tokio-rustls", "tokio"]
+__tls = ["dep:bytes", "dep:rustls", "dep:tokio-rustls", "tokio", "hickory-runtime/__tls"]
 __https = ["dep:bytes", "dep:h2", "dep:http"]
-__quic = ["dep:bytes", "dep:pin-project-lite", "dep:quinn"]
+__quic = ["dep:bytes", "dep:pin-project-lite", "dep:quinn", "hickory-runtime/__quic"]
 __h3 = ["dep:h3", "dep:h3-quinn", "dep:http"]
 
 rustls-platform-verifier = ["dep:rustls-platform-verifier"]
@@ -41,7 +41,7 @@ dnssec-aws-lc-rs = ["dep:aws-lc-rs", "aws-lc-rs/aws-lc-sys", "aws-lc-rs/ring-io"
 dnssec-ring = ["dep:ring", "hickory-proto/dnssec-ring", "__dnssec"]
 __dnssec = ["dep:bitflags", "dep:rustls-pki-types", "dep:time", "dep:lru-cache", "dep:parking_lot"]
 
-tokio = ["dep:tokio", "tokio/net", "tokio/rt", "tokio/time", "tokio/rt-multi-thread"]
+tokio = ["dep:tokio", "hickory-runtime/tokio"]
 default = ["tokio"]
 
 serde = ["dep:serde", "url/serde"]
@@ -67,6 +67,7 @@ h2 = { workspace = true, features = ["stream"], optional = true }
 h3 = { workspace = true, optional = true }
 h3-quinn = { workspace = true, optional = true }
 hickory-proto.workspace = true
+hickory-runtime.workspace = true
 http = { workspace = true, optional = true }
 idna.workspace = true
 ipnet.workspace = true

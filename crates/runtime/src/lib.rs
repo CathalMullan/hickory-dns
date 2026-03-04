@@ -21,6 +21,8 @@ use tokio::runtime::Runtime;
 #[cfg(any(test, feature = "tokio"))]
 use tokio::task::JoinHandle;
 
+pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// Spawn a background task, if it was present
 #[cfg(any(test, feature = "tokio"))]
 pub fn spawn_bg<F: Future<Output = R> + Send + 'static, R: Send + 'static>(
@@ -126,14 +128,15 @@ mod tokio_runtime {
 
     #[cfg(feature = "__quic")]
     use quinn::Runtime;
-    use tokio::net::{TcpSocket, TcpStream, UdpSocket as TokioUdpSocket};
+    use tokio::net::{TcpSocket, TcpStream};
     use tokio::task::JoinSet;
     use tokio::time::timeout;
     use tracing::debug;
 
+    use core::net::{Ipv4Addr, Ipv6Addr};
+
     use super::iocompat::AsyncIoTokioAsStd;
     use super::*;
-    use crate::xfer::CONNECT_TIMEOUT;
 
     /// A handle to the Tokio runtime
     #[derive(Clone, Default)]
@@ -208,7 +211,11 @@ mod tokio_runtime {
             local_addr: SocketAddr,
             _server_addr: SocketAddr,
         ) -> Pin<Box<dyn Send + Future<Output = Result<Self::Udp, io::Error>>>> {
-            Box::pin(async move { tokio::net::UdpSocket::bind(local_addr).await })
+            Box::pin(async move {
+                tokio::net::UdpSocket::bind(local_addr)
+                    .await
+                    .map(Into::into)
+            })
         }
 
         #[cfg(feature = "__quic")]
@@ -236,10 +243,103 @@ mod tokio_runtime {
             quinn::TokioRuntime.wrap_udp_socket(socket)
         }
     }
+
+    #[derive(Debug)]
+    pub struct TokioUdpSocket(tokio::net::UdpSocket);
+
+    impl core::ops::Deref for TokioUdpSocket {
+        type Target = tokio::net::UdpSocket;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl TokioUdpSocket {
+        pub async fn bind(addr: SocketAddr) -> io::Result<Self> {
+            tokio::net::UdpSocket::bind(addr).await.map(Self)
+        }
+
+        pub fn from_std(socket: std::net::UdpSocket) -> io::Result<Self> {
+            tokio::net::UdpSocket::from_std(socket).map(Self)
+        }
+
+        pub fn into_std(self) -> io::Result<std::net::UdpSocket> {
+            self.0.into_std()
+        }
+    }
+
+    impl From<tokio::net::UdpSocket> for TokioUdpSocket {
+        fn from(socket: tokio::net::UdpSocket) -> Self {
+            Self(socket)
+        }
+    }
+
+    #[async_trait]
+    impl DnsUdpSocket for TokioUdpSocket {
+        type Time = TokioTime;
+
+        fn poll_recv_from(
+            &self,
+            cx: &mut Context<'_>,
+            buf: &mut [u8],
+        ) -> Poll<io::Result<(usize, SocketAddr)>> {
+            let mut buf = tokio::io::ReadBuf::new(buf);
+            let addr = core::task::ready!(self.0.poll_recv_from(cx, &mut buf))?;
+            let len = buf.filled().len();
+
+            Poll::Ready(Ok((len, addr)))
+        }
+
+        fn poll_send_to(
+            &self,
+            cx: &mut Context<'_>,
+            buf: &[u8],
+            target: SocketAddr,
+        ) -> Poll<io::Result<usize>> {
+            self.0.poll_send_to(cx, buf, target)
+        }
+    }
+
+    #[async_trait]
+    impl UdpSocket for TokioUdpSocket {
+        /// sets up up a "client" udp connection that will only receive packets from the associated address
+        ///
+        /// if the addr is ipv4 then it will bind local addr to 0.0.0.0:0, ipv6 \[::\]0
+        async fn connect(addr: SocketAddr) -> io::Result<Self> {
+            let bind_addr: SocketAddr = match addr {
+                SocketAddr::V4(_addr) => (Ipv4Addr::UNSPECIFIED, 0).into(),
+                SocketAddr::V6(_addr) => (Ipv6Addr::UNSPECIFIED, 0).into(),
+            };
+
+            Self::connect_with_bind(addr, bind_addr).await
+        }
+
+        /// same as connect, but binds to the specified local address for sending address
+        async fn connect_with_bind(_addr: SocketAddr, bind_addr: SocketAddr) -> io::Result<Self> {
+            let socket = Self::bind(bind_addr).await?;
+
+            // TODO: research connect more, it appears to break UDP receiving tests, etc...
+            // socket.connect(addr).await?;
+
+            Ok(socket)
+        }
+
+        async fn bind(addr: SocketAddr) -> io::Result<Self> {
+            Self::bind(addr).await
+        }
+    }
+
+    impl<T> DnsTcpStream for AsyncIoTokioAsStd<T>
+    where
+        T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + Sized + 'static,
+    {
+        type Time = TokioTime;
+    }
 }
 
 #[cfg(feature = "tokio")]
-pub use tokio_runtime::{TokioHandle, TokioRuntimeProvider};
+pub use tokio_runtime::*;
 
 /// RuntimeProvider defines which async runtime that handles IO and timers.
 pub trait RuntimeProvider: Clone + Send + Sync + Unpin + 'static {
@@ -318,6 +418,19 @@ where
     async fn send_to(&self, buf: &[u8], target: SocketAddr) -> io::Result<usize> {
         poll_fn(|cx| self.poll_send_to(cx, buf, target)).await
     }
+}
+
+/// Trait for UdpSocket
+#[async_trait]
+pub trait UdpSocket: DnsUdpSocket {
+    /// setups up a "client" udp connection that will only receive packets from the associated address
+    async fn connect(addr: SocketAddr) -> io::Result<Self>;
+
+    /// same as connect, but binds to the specified local address for sending address
+    async fn connect_with_bind(addr: SocketAddr, bind_addr: SocketAddr) -> io::Result<Self>;
+
+    /// a "server" UDP socket, that bind to the local listening address, and unbound remote address (can receive from anything)
+    async fn bind(addr: SocketAddr) -> io::Result<Self>;
 }
 
 /// Noop trait for when the `quinn` dependency is not available.
